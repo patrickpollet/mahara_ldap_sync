@@ -57,7 +57,7 @@
  * For the synchronisation of group membership , this script MUST be run before
  * the mahara_sync_groups script
  *
- * This script is strongly inspired of synching Moodle's users with LDAP 
+ * This script is strongly inspired of synching Moodle's users with LDAP
  */
 
 
