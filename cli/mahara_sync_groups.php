@@ -62,7 +62,7 @@
  *
  * Sample cron entry:
  * # 5 minutes past 4am
- * 5 4 * * * $sudo -u www-data /usr/bin/php /var/www/mahara/local/ldap/cli/mahara_sync_groups.php 'my institution'
+ * 5 4 * * * $sudo -u www-data /usr/bin/php /var/www/mahara/local/ldap/cli/mahara_sync_groups.php -i='my institution'
  *
  * Notes:
  *   - it is required to use the web server account when executing PHP CLI scripts
@@ -102,16 +102,28 @@ $options['institution']->description = get_string('institutionname', 'local.ldap
 $options['institution']->required = true;
 
 $options['exclude'] = new stdClass();
-$options['exclude']->examplevalue = '\repository*;cipc-*\'';
+$options['exclude']->examplevalue = '\repository*;cipc-*[;another reg. exp.]\'';
 $options['exclude']->shortoptions = array('x');
 $options['exclude']->description = get_string('excludelist', 'local.ldap');
 $options['exclude']->required = false;
 
 $options['include'] = new stdClass();
-$options['include']->examplevalue = '\repository*;cipc-*\'';
+$options['include']->examplevalue = '\repository*;cipc-*[;another reg. exp.]\'';
 $options['include']->shortoptions = array('o');
 $options['include']->description = get_string('includelist', 'local.ldap');
 $options['include']->required = false;
+
+$options['contexts'] = new stdClass();
+$options['contexts']->examplevalue = '\'ou=groups,ou=pc,dc=insa-lyon,dc=fr[;anothercontext]\'';
+$options['contexts']->shortoptions = array('c');
+$options['contexts']->description = get_string('searchcontexts', 'local.ldap');
+$options['contexts']->required = false;
+
+$options['searchsub'] = new stdClass();
+$options['searchsub']->examplevalue = '1';
+$options['searchsub']->shortoptions = array('s');
+$options['searchsub']->description = get_string('searchsubcontexts', 'local.ldap');
+$options['searchsub']->required = false;
 
 $settings = new stdClass();
 $settings->options = $options;
@@ -126,6 +138,8 @@ try {
     $excludelist = explode(';', $cli->get_cli_param('exclude'));
     $includelist = explode(';', $cli->get_cli_param('include'));
     $CFG->debug_ldap_groupes = $cli->get_cli_param('verbose');
+    $onlycontexts= $cli->get_cli_param('contexts');
+    $searchsub= $cli->get_cli_param('searchsub');
 }
 // we catch missing parameter and unknown institution
 catch (Exception $e) {
@@ -152,10 +166,28 @@ if (count($auths) == 0) {
 
 foreach ($auths as $auth) {
     $instance = new  GAAuthLdap($auth->id);
+
+// override defaut contexts values for the auth plugin
+    if ($onlycontexts) {
+        $instance->set_config('contexts',$onlycontexts);
+    }
+
+    // OVERRRIDING serachsub contexts for the auth plugin
+    if ($searchsub !== false ) {
+        $instance->set_config('search_sub', $searchsub ? 'yes' : 'no');
+    }
+
+    if ($CFG->debug_ldap_groupes) {
+        moodle_print_object("config. LDAP : ",$instance->get_config());
+    }
+
+
+
     $groups = $instance->ldap_get_grouplist();
     if ($CFG->debug_ldap_groupes) {
         moodle_print_object("groupes non filtrès : ", $groups);
     }
+
     foreach ($groups as $group) {
         if (!ldap_sync_filter_name($group, $includelist, $excludelist)) {
             continue;
@@ -168,7 +200,10 @@ foreach ($auths as $auth) {
         if ($CFG->debug_ldap_groupes) {
             moodle_print_object($group.' : ', $users);
         }
-
+        //don't waste time for empty groups
+        if (count($users)==0) {
+            continue;
+        }
 
 
 

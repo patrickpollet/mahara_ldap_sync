@@ -29,9 +29,25 @@ class GAAuthLdap extends AuthLdap {
         //argh phpldap convert uniqueMember to lowercase array keys when returning the list of members  ...
         $this->config['memberattribute'] = strtolower(!empty($CFG->ldap_member_attribute) ? $CFG->ldap_member_attribute : 'uniquemember');
         $this->config['memberattribute_isdn'] = !empty($CFG->ldap_member_attribute_isdn) ? $CFG->ldap_member_attribute_isdn : 1;
-        if ($CFG->debug_ldap_groupes) {
-            moodle_print_object("config. LDAP : ",$this->config);
-        }
+
+    }
+
+
+    /**
+     * this class allows to change default config option read from the database
+     * @param $key
+     * @param $value
+     */
+    function set_config ($key,$value) {
+        $this->config[$key]=$value;
+    }
+
+    /**
+     * for debugging purpose
+     * @return array  current config for printing
+     */
+    function get_config() {
+        return $this->config;
     }
 
     /**
@@ -61,7 +77,7 @@ class GAAuthLdap extends AuthLdap {
                 continue;
             }
 
-            if ($this->config['search_sub']) {
+            if ($this->config['search_sub']== 'yes') {
                 //use ldap_search to find first group from subtree
                 $ldap_result = ldap_search($ldapconnection, $context, $filter, array(
                     $this->config['group_attribute']
