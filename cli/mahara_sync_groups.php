@@ -85,6 +85,7 @@ require(dirname(dirname(dirname(dirname(__FILE__)))) . '/init.php');
 require(get_config('libroot') . 'cli.php');
 
 require(get_config('libroot') . 'institution.php');
+require(get_config('libroot') . 'group.php');
 require_once(get_config('docroot') . 'auth/ldap/lib.php');
 require_once(dirname(dirname(__FILE__))) . '/lib.php';
 
@@ -196,12 +197,43 @@ foreach ($auths as $auth) {
         if ($CFG->debug_ldap_groupes) {
             moodle_print_object("traitement du groupe  : ", $group);
         }
-        $users = $instance->ldap_get_group_members($group);
-        if ($CFG->debug_ldap_groupes) {
-            moodle_print_object($group.' : ', $users);
+
+
+        // test whether this group exists within the institution
+        if (! get_record('group', 'shortname', $group, 'institution', $institutionname)) {
+
+            try {
+                if ($CFG->debug_ldap_groupes) {
+                    moodle_print_object('création du groupe ', $group);
+                }
+                $dbgroup =array();
+                $dbgroup['name']=$institutionname . ' : ' .$group;
+                $dbgroup['institution'] = $institutionname;
+                $dbgroup['shortname']=$group;
+                $dbgroup['grouptype']='standard';  // see for course
+                $dbgroup['controlled']=1; //definitively
+
+               $groupid= group_create ($dbgroup);
+                // this currently fail since we are not authenticated to Mahara
+                // group_create: cannot create a group in this institution
+
+
+            }
+            catch (Exception $ex) {
+                $cli->cli_print ($ex->getMessage());
+                continue;
+            }
         }
+        // now it does  exist see what members hould be added/removed
+
+        $ldapusers = $instance->ldap_get_group_members($group);
+        if ($CFG->debug_ldap_groupes) {
+          //  moodle_print_object($group.' : ', $ldapusers);
+        }
+
+        $ldapusers= ldap_sync_filter_non_existing ($ldapusers,$institutionname);
         //don't waste time for empty groups
-        if (count($users)==0) {
+        if (count($ldapusers)==0) {
             continue;
         }
 

@@ -406,6 +406,18 @@ function ldap_sync_filter_name($name, $includes, $excludes) {
     return true;
 }
 
+/**
+ * given an array of usernames, remove those that do not belong to the institution
+ * and thus should not be processed
+ * @param $ldapusers
+ * @param $institutionname
+ * @return mixed
+ */
+
+function ldap_sync_filter_non_existing ($ldapusers,$institutionname) {
+    return $ldapusers;
+}
+
 
 function moodle_print_object($title, $obj) {
     print $title;
