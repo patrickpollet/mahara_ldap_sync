@@ -151,11 +151,10 @@ class GAAuthLdap extends AuthLdap {
 
                     $membre = trim($groupe[0][$this->config['memberattribute']][$g]);
                     if ($membre != "") { //*3
-                        if ($CFG->debug_ldap_groupes) {
-                            moodle_print_object("membre : ", $membre);
-                        }
+                        //if ($CFG->debug_ldap_groupes) {
+                        //    moodle_print_object("membre : ", $membre);
+                        //}
                         if ($this->config['memberattribute_isdn']) {
-
                             $membre = $this->get_account_bydn($this->config['memberattribute'], $membre);
                         }
 
@@ -192,8 +191,10 @@ class GAAuthLdap extends AuthLdap {
             return $ret;
         }
 
-        $textlib = textlib_get_instance();
-        $group = $textlib->convert($group, 'utf-8', $this->config['ldapencoding']);
+        if (function_exists('textlib_get_instance')) {
+            $textlib = textlib_get_instance();
+            $group = $textlib->convert($group, 'utf-8', $this->config['ldapencoding']);
+        }
 
         $queryg = "(&(cn=" . trim($group) . ")(objectClass={$this->config['group_class']}))";
         if ($CFG->debug_ldap_groupes) {
@@ -239,9 +240,9 @@ class GAAuthLdap extends AuthLdap {
                     for ($g = 0; $g < (sizeof($groupe[0][$attribut]) - 1); $g++) {
                         $membre = trim($groupe[0][$this->config['memberattribute']][$g]);
                         if ($membre != "") { //*3
-                            if ($CFG->debug_ldap_groupes) {
-                                moodle_print_object("membre : ", $membre);
-                            }
+                           // if ($CFG->debug_ldap_groupes) {
+                           //     moodle_print_object("membre : ", $membre);
+                           // }
                             if ($this->config['memberattribute_isdn']) {
 
                                 $membre = $this->get_account_bydn($this->config['memberattribute'], $membre);
@@ -260,9 +261,9 @@ class GAAuthLdap extends AuthLdap {
                 $end = $end + $size;
             }
         }
-        if ($CFG->debug_ldap_groupes) {
-            moodle_print_object("retour get_g_m ", $ret);
-        }
+        //if ($CFG->debug_ldap_groupes) {
+        //    moodle_print_object("retour get_g_m ", $ret);
+       // }
         @ldap_close($ldapconnection);
         return $ret;
     }
@@ -278,19 +279,20 @@ class GAAuthLdap extends AuthLdap {
             $dn_tmp1 = explode(",", $dn);
             if (count($dn_tmp1) > 1) {
                 // normalement le premier élément est soir cn=..., soit uid=...
-                if ($CFG->debug_ldap_groupes) {
-                    moodle_print_object("membre_tmp1: ", $dn_tmp1);
-                }
+                //if ($CFG->debug_ldap_groupes) {
+                //    moodle_print_object("membre_tmp1: ", $dn_tmp1);
+                //}
                 //essaie de virer la suite
                 $dn_tmp2 = explode("=", trim($dn_tmp1[0]));
-                if ($CFG->debug_ldap_groupes) {
-                    moodle_print_object("membre_tmp2: ", $dn_tmp2);
-                }
+               // if ($CFG->debug_ldap_groupes) {
+               //     moodle_print_object("membre_tmp2: ", $dn_tmp2);
+               // }
                 if ($dn_tmp2[0] == $this->config['user_attribute']) //celui de la config
                 {
                     return $dn_tmp2[1];
                 }
                 else {
+                    // we do not supportgroups whithin group (usually added as cn=groupxxxx,ou=....)
                     //intervenir ici !!!
                     if ($CFG->debug_ldap_groupes) {
                         moodle_print_object("$dn attribut trouvé {$this->config['user_attribute']} different de ", $this->config['user_attribute'],'');
@@ -343,28 +345,20 @@ class GAAuthLdap extends AuthLdap {
 
 
 /**
- * Returns all authentication instances using the CAS method
+ * Returns all authentication instances using the $name method
  *
  */
-function auth_instance_get_cas_records() {
-    $result = get_records_select_array('auth_instance', "authname = 'cas'");
+function auth_instance_get_records($name) {
+    $result = get_records_select_array('auth_instance', "authname = '".$name."'");
     $result = empty($result) ? array() : $result;
     return $result;
 }
 
-/**
- * Returns all authentication instances using the LDAP method
- *
- */
-function auth_instance_get_ldap_records() {
-    $result = get_records_select_array('auth_instance', "authname = 'ldap'");
-    $result = empty($result) ? array() : $result;
-    return $result;
-}
+
 
 function auth_instance_get_matching_instances($institutionname) {
     $final = array();
-    $result = array_merge(auth_instance_get_cas_records(), auth_instance_get_ldap_records());
+    $result = array_merge(auth_instance_get_records('cas'), auth_instance_get_records('ldap'));
     foreach ($result as $record) {
         if ($record->institution == $institutionname) {
             $final[] = $record;
@@ -388,7 +382,6 @@ function ldap_sync_filter_name($name, $includes, $excludes) {
                 return false;
             }
         }
-
     }
     if (!empty($excludes)) {
         foreach ($excludes as $regexp) {
@@ -406,17 +399,7 @@ function ldap_sync_filter_name($name, $includes, $excludes) {
     return true;
 }
 
-/**
- * given an array of usernames, remove those that do not belong to the institution
- * and thus should not be processed
- * @param $ldapusers
- * @param $institutionname
- * @return mixed
- */
 
-function ldap_sync_filter_non_existing ($ldapusers,$institutionname) {
-    return $ldapusers;
-}
 
 
 function moodle_print_object($title, $obj) {

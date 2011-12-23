@@ -84,8 +84,13 @@ define('CLI', 1);
 require(dirname(dirname(dirname(dirname(__FILE__)))) . '/init.php');
 require(get_config('libroot') . 'cli.php');
 
+// must be done before any output
+$USER->reanimate(1, 1);
+
+
 require(get_config('libroot') . 'institution.php');
 require(get_config('libroot') . 'group.php');
+require(get_config('libroot') . 'searchlib.php');
 require_once(get_config('docroot') . 'auth/ldap/lib.php');
 require_once(dirname(dirname(__FILE__))) . '/lib.php';
 
@@ -126,6 +131,13 @@ $options['searchsub']->shortoptions = array('s');
 $options['searchsub']->description = get_string('searchsubcontexts', 'local.ldap');
 $options['searchsub']->required = false;
 
+$options['grouptype'] = new stdClass();
+$options['grouptype']->examplevalue = 'course | standard';
+$options['grouptype']->shortoptions = array('t');
+$options['grouptype']->description = get_string('grouptype', 'local.ldap');
+$options['grouptype']->required = false;
+
+
 $settings = new stdClass();
 $settings->options = $options;
 $settings->info = get_string('cli_mahara_sync_groups', 'local.ldap');
@@ -139,13 +151,14 @@ try {
     $excludelist = explode(';', $cli->get_cli_param('exclude'));
     $includelist = explode(';', $cli->get_cli_param('include'));
     $CFG->debug_ldap_groupes = $cli->get_cli_param('verbose');
-    $onlycontexts= $cli->get_cli_param('contexts');
-    $searchsub= $cli->get_cli_param('searchsub');
+    $onlycontexts = $cli->get_cli_param('contexts');
+    $searchsub = $cli->get_cli_param('searchsub');
+    $grouptype = $cli->get_cli_param('grouptype') == 'course' ? 'course' : 'standard';
 }
 // we catch missing parameter and unknown institution
 catch (Exception $e) {
+    $USER->logout(); // important
     cli::cli_exit($e->getMessage(), true);
-
 }
 
 if ($CFG->debug_ldap_groupes) {
@@ -158,37 +171,60 @@ if ($CFG->debug_ldap_groupes) {
 $auths = auth_instance_get_matching_instances($institutionname);
 
 if ($CFG->debug_ldap_groupes) {
-    moodle_print_object("auths candidates : ",$auths);
+    moodle_print_object("auths candidates : ", $auths);
 }
 
 if (count($auths) == 0) {
     cli::cli_exit(get_string('cli_mahara_nomatchingauths', 'local.ldap'));
 }
 
+//fetch current members of that institution
+$params = new StdClass;
+$params->institution = $institutionname;
+$params->member = 1;
+$params->query = '';
+$params->lastinstitution = null;
+$params->requested = null;
+$params->invitedby = null;
+$limit = 0;
+$data = get_institutional_admin_search_results($params, $limit);
+if ($CFG->debug_ldap_groupes) {
+    moodle_print_object("current members  : ", $data);
+}
+// map user's id to username for easy retrivieng
+$currentmembers = array();
+foreach ($data['data'] as $datum) {
+    $currentmembers [$datum['username']] = $datum['id'];
+}
+
+if ($CFG->debug_ldap_groupes) {
+    moodle_print_object("current members  II : ", $currentmembers);
+}
+
+// it is unlikely that there is mre than one LDAP per institution
 foreach ($auths as $auth) {
     $instance = new  GAAuthLdap($auth->id);
 
-// override defaut contexts values for the auth plugin
+    // override defaut contexts values for the auth plugin
     if ($onlycontexts) {
-        $instance->set_config('contexts',$onlycontexts);
+        $instance->set_config('contexts', $onlycontexts);
     }
 
-    // OVERRRIDING serachsub contexts for the auth plugin
-    if ($searchsub !== false ) {
+    // OVERRRIDING searchsub contexts for this auth plugin
+    if ($searchsub !== false) {
         $instance->set_config('search_sub', $searchsub ? 'yes' : 'no');
     }
 
     if ($CFG->debug_ldap_groupes) {
-        moodle_print_object("config. LDAP : ",$instance->get_config());
+        moodle_print_object("config. LDAP : ", $instance->get_config());
     }
-
 
 
     $groups = $instance->ldap_get_grouplist();
     if ($CFG->debug_ldap_groupes) {
         moodle_print_object("groupes non filtrès : ", $groups);
     }
-
+    $nbadded = 0;
     foreach ($groups as $group) {
         if (!ldap_sync_filter_name($group, $includelist, $excludelist)) {
             continue;
@@ -200,111 +236,66 @@ foreach ($auths as $auth) {
 
 
         // test whether this group exists within the institution
-        if (! get_record('group', 'shortname', $group, 'institution', $institutionname)) {
+        if (!$dbgroup = get_record('group', 'shortname', $group, 'institution', $institutionname)) {
 
             try {
                 if ($CFG->debug_ldap_groupes) {
                     moodle_print_object('création du groupe ', $group);
                 }
-                $dbgroup =array();
-                $dbgroup['name']=$institutionname . ' : ' .$group;
+                $dbgroup = array();
+                $dbgroup['name'] = $institutionname . ' : ' . $group;
                 $dbgroup['institution'] = $institutionname;
-                $dbgroup['shortname']=$group;
-                $dbgroup['grouptype']='standard';  // see for course
-                $dbgroup['controlled']=1; //definitively
-
-               $groupid= group_create ($dbgroup);
-                // this currently fail since we are not authenticated to Mahara
-                // group_create: cannot create a group in this institution
-
-
+                $dbgroup['shortname'] = $group;
+                $dbgroup['grouptype'] = $grouptype; // default standard (change to course)
+                $dbgroup['controlled'] = 1; //definitively
+                $nbadded++;
+                $groupid = group_create($dbgroup);
             }
             catch (Exception $ex) {
-                $cli->cli_print ($ex->getMessage());
+                $cli->cli_print($ex->getMessage());
                 continue;
             }
+        } else {
+            $groupid = $dbgroup->id;
+            if ($CFG->debug_ldap_groupes) {
+                moodle_print_object('groupe existe déja :', $group);
+            }
+
         }
-        // now it does  exist see what members hould be added/removed
+        // now it does  exist see what members should be added/removed
 
         $ldapusers = $instance->ldap_get_group_members($group);
         if ($CFG->debug_ldap_groupes) {
-          //  moodle_print_object($group.' : ', $ldapusers);
-        }
-
-        $ldapusers= ldap_sync_filter_non_existing ($ldapusers,$institutionname);
-        //don't waste time for empty groups
-        if (count($ldapusers)==0) {
-            continue;
+             moodle_print_object($group.' : ', $ldapusers);
         }
 
 
+        $members = array('1' => 'admin'); //must be set otherwise fatal error group_update_members: no group admins listed for group
+        foreach ($ldapusers as $username) {
+            if (isset($currentmembers[$username])) {
+                $id = $currentmembers[$username];
+                $members[$id] = 'member';
+            }
+        }
+        if ($CFG->debug_ldap_groupes) {
+            moodle_print_object('nouvelle liste :', $members);
+        }
 
+        $result = group_update_members($groupid, $members);
+        if ($CFG->debug_ldap_groupes) {
+            if ($result) {
+            moodle_print_object('resultat : ', $result);
+            }else {
+                moodle_print_object('no change for ',$group);
+            }
+        }
 
-
-
-
-        // break;
     }
 }
 
-
+$USER->logout(); // important
 cli::cli_exit("fini", true);
 
 
-/************
-// Ensure errors are well explained
-$CFG->debug = DEBUG_NORMAL;
-$CFG->debug_ldap_groupes=false;
-
-if (!is_enabled_auth('cas')) {
-error_log('[AUTH CAS] ' . get_string('pluginnotenabled', 'auth_ldap'));
-die;
-}
 
 
-$plugin = new auth_plugin_cohort();
-
-$ldap_groups = $plugin->ldap_get_grouplist();
-//print_r($ldap_groups);
-
-foreach ($ldap_groups as $group => $groupname) {
-print "traitement du groupe " . $groupname . "\n";
-$params = array(
-'idnumber' => $groupname
-);
-if (!$cohort = $DB->get_record('cohort', $params, '*')) {
-$cohort = new StdClass();
-$cohort->name = $cohort->idnumber = $groupname;
-$cohort->contextid = get_system_context()->id;
-// no Moodle 21 is looking for this component
-//$cohort->component = 'sync_ldap';
-$cohortid = cohort_add_cohort($cohort);
-print "creation cohorte " . $group . "\n";
-
-} else
-{
-$cohortid = $cohort->id;
-}
-//    print ($cohortid." ");
-$ldap_members = $plugin->ldap_get_group_members($groupname);
-$cohort_members = $plugin->get_cohort_members($cohortid);
-
-foreach ($cohort_members as $userid => $user) {
-if (!isset ($ldap_members[$userid])) {
-cohort_remove_member($cohortid, $userid);
-print "desinscription de " .
-$user->username .
-" de la cohorte " .
-$groupname .
-"\n";
-}
-}
-
-foreach ($ldap_members as $userid => $username) {
-if (!$plugin->cohort_is_member($cohortid, $userid)) {
-cohort_add_member($cohortid, $userid);
-print "inscription de " . $username . " à la cohorte " . $groupname . "\n";
-}
-}
-//break;
- ********/
