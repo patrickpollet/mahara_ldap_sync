@@ -219,6 +219,8 @@ foreach ($auths as $auth) {
     $fieldstofetch = array_merge($fieldstofetch, array('id', 'username', 'suspendedreason'));
     $fieldstofetch = implode(',',$fieldstofetch);
 
+
+
     if ($CFG->debug_ldap_groupes) {
         moodle_print_object("LDAP attributes : ", $ldapattributes);
     }
@@ -251,12 +253,12 @@ foreach ($auths as $auth) {
     foreach ($ldapusers as $ldapusername) {
         if (isset($currentmembers[$ldapusername])) {
             $nbpresents++;
-            $user = $currentmembers[$ldapusername];
-            if ($doupdate) {
 
+            if ($doupdate) {
+                $user = $currentmembers[$ldapusername];
                 $cli->cli_print('updating user ' . $ldapusername);
                 // Retrieve information of user from LDAP
-                $ldapdetails = $instance->get_user_info($user->username, $ldapattributes);
+                $ldapdetails = $instance->get_user_info($ldapusername, $ldapattributes);
                 // this method returns an object and we want an array below
                 $ldapdetails = (array)$ldapdetails;
 
@@ -276,6 +278,8 @@ foreach ($auths as $auth) {
 
 
                 $nbupdated++;
+                unset($user);
+                unset($ldapdetails);
             }
             //TODO unsuspend if needed
             unset ($currentmembers[$ldapusername]);
@@ -283,7 +287,7 @@ foreach ($auths as $auth) {
         } else {
             // Retrieve information of user from LDAP
             $ldapdetails = $instance->get_user_info($ldapusername, $ldapattributes);
-            $ldapdetails->username = $ldapusername;
+            $ldapdetails->username = $ldapusername; //not returned by LDAP
             $ldapdetails->authinstance = $auth->id;
             if ($CFG->debug_ldap_groupes) {
                 moodle_print_object("creation de ",$ldapdetails);
@@ -295,8 +299,8 @@ foreach ($auths as $auth) {
         if ($nbcreated > 1000) {
             break;
         }
-
     }
+
     // now currentmembers contains ldap/cas users that are not anymore in LDAP
     foreach ($currentmembers as $memberusername => $member) {
         if ($dosuspend) {
