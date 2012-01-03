@@ -38,8 +38,8 @@ class GAAuthLdap extends AuthLdap {
      * @param $key
      * @param $value
      */
-    function set_config ($key,$value) {
-        $this->config[$key]=$value;
+    function set_config($key, $value) {
+        $this->config[$key] = $value;
     }
 
     /**
@@ -77,7 +77,7 @@ class GAAuthLdap extends AuthLdap {
                 continue;
             }
 
-            if ($this->config['search_sub']== 'yes') {
+            if ($this->config['search_sub'] == 'yes') {
                 //use ldap_search to find first group from subtree
                 $ldap_result = ldap_search($ldapconnection, $context, $filter, array(
                     $this->config['group_attribute']
@@ -137,6 +137,7 @@ class GAAuthLdap extends AuthLdap {
             if (empty ($context)) {
                 continue;
             }
+
 
             $resultg = ldap_search($ldapconnection, $context, $queryg);
 
@@ -240,9 +241,9 @@ class GAAuthLdap extends AuthLdap {
                     for ($g = 0; $g < (sizeof($groupe[0][$attribut]) - 1); $g++) {
                         $membre = trim($groupe[0][$this->config['memberattribute']][$g]);
                         if ($membre != "") { //*3
-                           // if ($CFG->debug_ldap_groupes) {
-                           //     moodle_print_object("membre : ", $membre);
-                           // }
+                            // if ($CFG->debug_ldap_groupes) {
+                            //     moodle_print_object("membre : ", $membre);
+                            // }
                             if ($this->config['memberattribute_isdn']) {
 
                                 $membre = $this->get_account_bydn($this->config['memberattribute'], $membre);
@@ -263,7 +264,7 @@ class GAAuthLdap extends AuthLdap {
         }
         //if ($CFG->debug_ldap_groupes) {
         //    moodle_print_object("retour get_g_m ", $ret);
-       // }
+        // }
         @ldap_close($ldapconnection);
         return $ret;
     }
@@ -284,9 +285,9 @@ class GAAuthLdap extends AuthLdap {
                 //}
                 //essaie de virer la suite
                 $dn_tmp2 = explode("=", trim($dn_tmp1[0]));
-               // if ($CFG->debug_ldap_groupes) {
-               //     moodle_print_object("membre_tmp2: ", $dn_tmp2);
-               // }
+                // if ($CFG->debug_ldap_groupes) {
+                //     moodle_print_object("membre_tmp2: ", $dn_tmp2);
+                // }
                 if ($dn_tmp2[0] == $this->config['user_attribute']) //celui de la config
                 {
                     return $dn_tmp2[1];
@@ -295,7 +296,7 @@ class GAAuthLdap extends AuthLdap {
                     // we do not supportgroups whithin group (usually added as cn=groupxxxx,ou=....)
                     //intervenir ici !!!
                     if ($CFG->debug_ldap_groupes) {
-                        moodle_print_object("$dn attribut trouvé {$this->config['user_attribute']} different de ", $this->config['user_attribute'],'');
+                        moodle_print_object("$dn attribut trouvé {$this->config['user_attribute']} different de ", $this->config['user_attribute'], '');
                     }
                     return false;
                 }
@@ -325,19 +326,72 @@ class GAAuthLdap extends AuthLdap {
         {
             $members = $this->ldap_get_group_members_rfc($groupe);
         }
-        /*
-        $ret = array();
-        foreach ($members as $member) {
-            $params = array(
-                'username' => $member
-            );
-            if ($user = $DB->get_record('user', $params, 'id,username')) {
-                $ret[$user->id] = $user->username;
-            }
-        }
-        return $ret;
-        */
+
         return $members;
+    }
+
+
+    function ldap_get_users($extrafilter = '') {
+        global $CFG;
+
+        $ret = array();
+        $ldapconnection = $this->ldap_connect();
+        if ($CFG->debug_ldap_groupes) {
+            moodle_print_object("connexion ldap: ", $ldapconnection);
+        }
+        if (!$ldapconnection) {
+            return $ret;
+        }
+
+        $filter = "(" . $this->config['user_attribute'] . "=*)";
+        if (!empty($this->config['objectclass'])) {
+            $filter .= "&(" . $this->config['objectclass'] . "))";
+        }
+        if ($extrafilter) {
+            $filter = "(&$filter($extrafilter))";
+        }
+        if ($CFG->debug_ldap_groupes) {
+            moodle_print_object("filter users ldap: ", $filter);
+        }
+
+        // get all contexts and look for first matching user
+        $ldap_contexts = explode(";", $this->config['contexts']);
+
+        foreach ($ldap_contexts as $context) {
+            $context = trim($context);
+            if (empty($context)) {
+                continue;
+            }
+
+            if ($this->config['search_sub'] == 'yes') {
+                // use ldap_search to find first user from subtree
+                $ldap_result = ldap_search($ldapconnection, $context, $filter,array($this->config['user_attribute']));
+
+            }
+            else {
+                // search only in this context
+                $ldap_result = ldap_list($ldapconnection,$filter, array($this->config['user_attribute']));
+            }
+
+            if ($entry = ldap_first_entry($ldapconnection, $ldap_result)) {
+                do {
+                    $value = ldap_get_values_len($ldapconnection, $entry, $this->config['user_attribute']);
+                    $value =$value[0];
+                    array_push($ret, $value);
+
+                } while ($entry = ldap_next_entry($ldapconnection, $entry));
+            }
+            unset($ldap_result); // free mem
+
+        }
+
+
+
+
+        @ldap_close($ldapconnection);
+        return $ret;
+
+
     }
 
 
@@ -349,11 +403,10 @@ class GAAuthLdap extends AuthLdap {
  *
  */
 function auth_instance_get_records($name) {
-    $result = get_records_select_array('auth_instance', "authname = '".$name."'");
+    $result = get_records_select_array('auth_instance', "authname = '" . $name . "'");
     $result = empty($result) ? array() : $result;
     return $result;
 }
-
 
 
 function auth_instance_get_matching_instances($institutionname) {
@@ -365,6 +418,14 @@ function auth_instance_get_matching_instances($institutionname) {
         }
     }
     return $final;
+
+}
+
+
+function auth_instance_get_concerned_users  ($authid) {
+    $result = get_records_select_array('usr', "authinstance = ".$authid);
+    $result = empty($result) ? array() : $result;
+    return $result;
 
 }
 
@@ -400,13 +461,13 @@ function ldap_sync_filter_name($name, $includes, $excludes) {
 }
 
 
-
-
 function moodle_print_object($title, $obj) {
     print $title;
-    if (is_object($obj) || is_array($obj))
+    if (is_object($obj) || is_array($obj)) {
         print_r($obj);
+    }
     else
-        print ($obj."\n");
+    {
+        print ($obj . "\n");
+    }
 }
-

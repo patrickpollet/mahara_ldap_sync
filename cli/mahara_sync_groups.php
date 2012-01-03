@@ -48,7 +48,7 @@
  * The purpose of this CLI script is to be run as a cron job to synchronize Mahara's groups
  * with groups defined on a LDAP server
  *
- * This script requires as a single parameter the name of the target institution
+ * This script requires at least a single parameter the name of the target institution
  * in which groups will be created/updated.
  * An instance of LDAP or CAS auth plugin MUST have been added to this institution
  * for this script to retrieve LDAP parameters
@@ -179,6 +179,7 @@ if (count($auths) == 0) {
 }
 
 //fetch current members of that institution
+
 $params = new StdClass;
 $params->institution = $institutionname;
 $params->member = 1;
@@ -187,15 +188,19 @@ $params->lastinstitution = null;
 $params->requested = null;
 $params->invitedby = null;
 $limit = 0;
+//note that the studentid returned here is always null since it is retrieved
+// from the table usr_institution and not from the table user ...
+// we don't need it here
 $data = get_institutional_admin_search_results($params, $limit);
 if ($CFG->debug_ldap_groupes) {
     moodle_print_object("current members  : ", $data);
 }
-// map user's id to username for easy retrivieng
+// map user's id to username for easy retrieving
 $currentmembers = array();
 foreach ($data['data'] as $datum) {
     $currentmembers [$datum['username']] = $datum['id'];
 }
+unset ($data); // save memory
 
 if ($CFG->debug_ldap_groupes) {
     moodle_print_object("current members  II : ", $currentmembers);
