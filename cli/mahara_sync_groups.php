@@ -244,9 +244,7 @@ foreach ($auths as $auth) {
         if (!$dbgroup = get_record('group', 'shortname', $group, 'institution', $institutionname)) {
 
             try {
-                if ($CFG->debug_ldap_groupes) {
-                    moodle_print_object('création du groupe ', $group);
-                }
+                $cli->cli_print ('creating group '.$group);
                 $dbgroup = array();
                 $dbgroup['name'] = $institutionname . ' : ' . $group;
                 $dbgroup['institution'] = $institutionname;
@@ -262,9 +260,7 @@ foreach ($auths as $auth) {
             }
         } else {
             $groupid = $dbgroup->id;
-            if ($CFG->debug_ldap_groupes) {
-                moodle_print_object('groupe existe déja :', $group);
-            }
+            $cli->cli_print ('group exists '.$group);
 
         }
         // now it does  exist see what members should be added/removed
@@ -287,20 +283,15 @@ foreach ($auths as $auth) {
         }
 
         $result = group_update_members($groupid, $members);
-        if ($CFG->debug_ldap_groupes) {
             if ($result) {
-            moodle_print_object('resultat : ', $result);
+                $cli->cli_print(" ->   added : {$result['added']} removed : {$result['removed']} updated : {$result['updated']}");
             }else {
-                moodle_print_object('no change for ',$group);
+                $cli->cli_print('->  no change for '.$group);
             }
-        }
 
     }
 }
 
 $USER->logout(); // important
 cli::cli_exit("fini", true);
-
-
-
 

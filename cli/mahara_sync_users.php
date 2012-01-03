@@ -175,8 +175,6 @@ if (count($auths) == 0) {
 }
 
 
-
-
 // it is unlikely that there is mre than one LDAP per institution
 foreach ($auths as $auth) {
     $instance = new  GAAuthLdap($auth->id);
@@ -191,7 +189,7 @@ foreach ($auths as $auth) {
         $instance->set_config('search_sub', $searchsub ? 'yes' : 'no');
     }
 
-        $instanceconfig=$instance->get_config();
+    $instanceconfig = $instance->get_config();
     if ($CFG->debug_ldap_groupes) {
         moodle_print_object("config. LDAP : ", $instanceconfig);
     }
@@ -213,11 +211,17 @@ foreach ($auths as $auth) {
     $ldapattributes['studentid'] = $instanceconfig['studentidfield'];
     $ldapattributes['preferredname'] = $instanceconfig['preferrednamefield'];
 
+    // Match database and ldap entries and update in database if required
+    $fieldstoimport = array_keys($ldapattributes);
+
+    // fields to fetch from usr table for existing users  (try to save memory
+    $fieldstofetch = array_keys($ldapattributes);
+    $fieldstofetch = array_merge($fieldstofetch, array('id', 'username', 'suspendedreason'));
+    $fieldstofetch = implode(',',$fieldstofetch);
 
     if ($CFG->debug_ldap_groupes) {
         moodle_print_object("LDAP attributes : ", $ldapattributes);
     }
-
 
 
     // we fetch only Mahara users of this institution concerned by this authinstance (either cas or ldap)
@@ -226,7 +230,7 @@ foreach ($auths as $auth) {
     // that does not support searching by auth instance id and do not return suspended status
 
 
-    $data=  auth_instance_get_concerned_users ($auth->id);
+    $data = auth_instance_get_concerned_users($auth->id, $fieldstofetch);
     if ($CFG->debug_ldap_groupes) {
         moodle_print_object("current members : ", $data);
     }
@@ -244,20 +248,18 @@ foreach ($auths as $auth) {
     }
 
 
-
     foreach ($ldapusers as $ldapusername) {
         if (isset($currentmembers[$ldapusername])) {
             $nbpresents++;
             $user = $currentmembers[$ldapusername];
             if ($doupdate) {
 
-
+                $cli->cli_print('updating user ' . $ldapusername);
                 // Retrieve information of user from LDAP
                 $ldapdetails = $instance->get_user_info($user->username, $ldapattributes);
                 // this method returns an object and we want an array below
                 $ldapdetails = (array)$ldapdetails;
-                // Match database and ldap entries and update in database if required
-                $fieldstoimport = array_keys($ldapattributes);
+
                 foreach ($fieldstoimport as $field) {
                     $sanitizer = "sanitize_$field";
                     $ldapdetails[$field] = $sanitizer($ldapdetails[$field]);
@@ -269,8 +271,8 @@ foreach ($auths as $auth) {
 
                 //we also must update the student id in table usr_institution
 
-                    set_field ('usr_institution','studentid',$user->studentid,'usr',$user->id,'institution',$institutionname );
-                     pp_error_log ('maj compte II',$user);
+                set_field('usr_institution', 'studentid', $user->studentid, 'usr', $user->id, 'institution', $institutionname);
+                //  pp_error_log ('maj compte II',$user);
 
 
                 $nbupdated++;
@@ -281,28 +283,35 @@ foreach ($auths as $auth) {
         } else {
             // Retrieve information of user from LDAP
             $ldapdetails = $instance->get_user_info($ldapusername, $ldapattributes);
-            $ldapdetails->username=$ldapusername;
-            $ldapdetails->authinstance= $auth->id;
-
-            pp_error_log("creation de ",$ldapdetails);
+            $ldapdetails->username = $ldapusername;
+            $ldapdetails->authinstance = $auth->id;
+            if ($CFG->debug_ldap_groupes) {
+                moodle_print_object("creation de ",$ldapdetails);
+            }
+            $cli->cli_print('creating user ' . $ldapusername);
             create_user($ldapdetails, array(), $institutionname);
-            $nbcreated ++;
+            $nbcreated++;
         }
-        if ($nbcreated >0)  break;
+        if ($nbcreated > 1000) {
+            break;
+        }
 
     }
     // now currentmembers contains ldap/cas users that are not anymore in LDAP
     foreach ($currentmembers as $memberusername => $member) {
         if ($dosuspend) {
+            $cli->cli_print('suspending user ' . $memberusername);
             $nbsuspended++;
 
         } else {
             if ($dodelete) {
+                $cli->cli_print('deleting user ' . $memberusername);
                 // should we remove it from institution ?
                 $nbdeleted++;
 
             } else {
                 // nothing to do
+                $cli->cli_print('ignoring user ' . $memberusername);
                 $nbignored++;
             }
         }

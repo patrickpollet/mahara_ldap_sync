@@ -422,8 +422,8 @@ function auth_instance_get_matching_instances($institutionname) {
 }
 
 
-function auth_instance_get_concerned_users  ($authid) {
-    $result = get_records_select_array('usr', "authinstance = ".$authid);
+function auth_instance_get_concerned_users  ($authid,$fieldstofetch) {
+    $result = get_records_select_array('usr', "authinstance = ".$authid,null,false,$fieldstofetch);
     $result = empty($result) ? array() : $result;
     return $result;
 
