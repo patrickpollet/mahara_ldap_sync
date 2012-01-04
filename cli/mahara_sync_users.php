@@ -66,6 +66,8 @@ define('ADMIN', 1);
 define('INSTALLER', 1);
 define('CLI', 1);
 
+define ('SUSPENDED_REASON', 'LDAP sync ');
+
 require(dirname(dirname(dirname(dirname(__FILE__)))) . '/init.php');
 require(get_config('libroot') . 'cli.php');
 
@@ -217,8 +219,7 @@ foreach ($auths as $auth) {
     // fields to fetch from usr table for existing users  (try to save memory
     $fieldstofetch = array_keys($ldapattributes);
     $fieldstofetch = array_merge($fieldstofetch, array('id', 'username', 'suspendedreason'));
-    $fieldstofetch = implode(',',$fieldstofetch);
-
+    $fieldstofetch = implode(',', $fieldstofetch);
 
 
     if ($CFG->debug_ldap_groupes) {
@@ -278,39 +279,44 @@ foreach ($auths as $auth) {
 
 
                 $nbupdated++;
+                //unsuspend if was supended by me at a previous run
+                if (!empty($user->suspendedreason) && strstr(SUSPENDED_REASON, $user->suspendedreason) !== false) {
+                    unsuspend_user($user->id);
+                }
                 unset($user);
                 unset($ldapdetails);
             }
-            //TODO unsuspend if needed
             unset ($currentmembers[$ldapusername]);
 
         } else {
-            // Retrieve information of user from LDAP
-            $ldapdetails = $instance->get_user_info($ldapusername, $ldapattributes);
-            $ldapdetails->username = $ldapusername; //not returned by LDAP
-            $ldapdetails->authinstance = $auth->id;
-            if ($CFG->debug_ldap_groupes) {
-                moodle_print_object("creation de ",$ldapdetails);
+            if (!$nocreate) {
+                // Retrieve information of user from LDAP
+                $ldapdetails = $instance->get_user_info($ldapusername, $ldapattributes);
+                $ldapdetails->username = $ldapusername; //not returned by LDAP
+                $ldapdetails->authinstance = $auth->id;
+                if ($CFG->debug_ldap_groupes) {
+                    moodle_print_object("creation de ", $ldapdetails);
+                }
+                $cli->cli_print('creating user ' . $ldapusername);
+                create_user($ldapdetails, array(), $institutionname);
+                $nbcreated++;
             }
-            $cli->cli_print('creating user ' . $ldapusername);
-            create_user($ldapdetails, array(), $institutionname);
-            $nbcreated++;
-        }
-        if ($nbcreated > 1000) {
-            break;
         }
     }
 
     // now currentmembers contains ldap/cas users that are not anymore in LDAP
     foreach ($currentmembers as $memberusername => $member) {
         if ($dosuspend) {
-            $cli->cli_print('suspending user ' . $memberusername);
-            $nbsuspended++;
+            if (!$member->suspendedreason) { //if not already suspended for any reason ( me or some manual operation)
+                $cli->cli_print('suspending user ' . $memberusername);
+                suspend_user($member->id, SUSPENDED_REASON . ' ' . time());
+                $nbsuspended++;
 
+            }
         } else {
             if ($dodelete) {
                 $cli->cli_print('deleting user ' . $memberusername);
-                // should we remove it from institution ?
+                delete_user($member->id);
                 $nbdeleted++;
 
             } else {
@@ -329,18 +335,6 @@ cli::cli_exit("fini", true);
 
 
 
-/**
- * Create user
- *
- * @param object $user stdclass or User object for the usr table
- * @param array  $profile profile field/values to set
- * @param string $institution Institution the user should joined to
- * @param stdclass $remoteauth authinstance record for a remote authinstance
- * @param string $remotename username on the remote site
- * @param array $accountprefs user account preferences to set
- * @return integer id of the new user
- */
-// function create_user($user, $profile=array(), $institution=null, $remoteauth=null, $remotename=null, $accountprefs=array()) {
 
 
 /**
@@ -353,19 +347,6 @@ cli::cli_exit("fini", true);
  * @param int $userid The ID of the user to delete
  */
 //function delete_user($userid) {
-
-
-/**
- * Update user
- *
- * @param object $user stdclass for the usr table
- * @param object $profile profile field/values to set
- * @param string $remotename username on the remote site
- * @param array $accountprefs user account preferences to set
- * @param bool $forceupdateremote force delete of remotename before update attempted
- * @return array list of updated fields
- */
-//function update_user($user, $profile, $remotename=null, $accountprefs=array(), $forceupdateremote=false) {
 
 
 /**
