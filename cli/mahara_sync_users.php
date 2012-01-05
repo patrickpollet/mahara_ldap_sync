@@ -124,19 +124,19 @@ $options['nocreate']->description = get_string('nocreate', 'local.ldap');
 $options['nocreate']->required = false;
 
 
-$options['suspend'] = new stdClass();
-$options['suspend']->shortoptions = array('s');
-$options['suspend']->description = get_string('suspend', 'local.ldap');
-$options['suspend']->required = false;
+$options['dosuspend'] = new stdClass();
+$options['dosuspend']->shortoptions = array('s');
+$options['dosuspend']->description = get_string('dosuspend', 'local.ldap');
+$options['dosuspend']->required = false;
 
-$options['delete'] = new stdClass();
-$options['delete']->shortoptions = array('d');
-$options['delete']->description = get_string('delete', 'local.ldap');
-$options['delete']->required = false;
+$options['dodelete'] = new stdClass();
+$options['dodelete']->shortoptions = array('d');
+$options['dodelete']->description = get_string('dodelete', 'local.ldap');
+$options['dodelete']->required = false;
 
 $settings = new stdClass();
 $settings->options = $options;
-$settings->info = get_string('cli_mahara_sync_groups', 'local.ldap');
+$settings->info = get_string('cli_mahara_sync_users', 'local.ldap');
 
 $cli->setup($settings);
 
@@ -152,8 +152,8 @@ try {
 
     $doupdate = $cli->get_cli_param('doupdate');
     $nocreate = $cli->get_cli_param('nocreate');
-    $dosuspend = $cli->get_cli_param('suspend');
-    $dodelete = $cli->get_cli_param('delete');
+    $dosuspend = $cli->get_cli_param('dosuspend');
+    $dodelete = $cli->get_cli_param('dodelete');
 
     if ($dosuspend && $dodelete) {
         throw new ParameterException (get_string('cannotdeleteandsuspend', 'local.ldap'));
@@ -334,34 +334,3 @@ $USER->logout(); // important
 cli::cli_exit("fini", true);
 
 
-
-
-
-/**
- * Deletes a user
- *
- * This function ensures that a user is deleted according to how Mahara wants a
- * deleted user to be. You can call it multiple times on the same user without
- * harm.
- *
- * @param int $userid The ID of the user to delete
- */
-//function delete_user($userid) {
-
-
-/**
- * Suspends a user
- *
- * @param int $suspendeduserid  The ID of the user to suspend
- * @param string $reason        The reason why the user is being suspended
- * @param int $suspendinguserid The ID of the user who is performing the suspension
- */
-//function suspend_user($suspendeduserid, $reason, $suspendinguserid=null) {
-
-
-/**
- * Unsuspends a user
- *
- * @param int $userid The ID of the user to unsuspend
- */
-//function unsuspend_user($userid) {
