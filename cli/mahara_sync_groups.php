@@ -65,10 +65,11 @@
  * 5 4 * * * $sudo -u www-data /usr/bin/php /var/www/mahara/local/ldap/cli/mahara_sync_groups.php -i='my institution'
  *
  * Notes:
- *   - it is required to use the web server account when executing PHP CLI scripts
+ *   - run this script on command line without any paramters to get help on all options
+ *   - it is required to use root or the the web server accounts when executing PHP CLI scripts
  *   - you need to change the "www-data" to match the apache user account
  *   - use "su" if "sudo" not available
- *   - If you have a large number of users, you may want to raise the memory limits
+ *   - If you have a large number of groups/users, you may want to raise the memory limits
  *     by passing -d memory_limit=256M
  *   - For debugging & better logging, you are encouraged to use in the command line:
  *     -d log_errors=1 -d error_reporting=E_ALL -d display_errors=0 -d html_errors=0
@@ -108,13 +109,13 @@ $options['institution']->description = get_string('institutionname', 'local.ldap
 $options['institution']->required = true;
 
 $options['exclude'] = new stdClass();
-$options['exclude']->examplevalue = '\repository*;cipc-*[;another reg. exp.]\'';
+$options['exclude']->examplevalue = '\'repository*;cipc-*[;another reg. exp.]\'';
 $options['exclude']->shortoptions = array('x');
 $options['exclude']->description = get_string('excludelist', 'local.ldap');
 $options['exclude']->required = false;
 
 $options['include'] = new stdClass();
-$options['include']->examplevalue = '\repository*;cipc-*[;another reg. exp.]\'';
+$options['include']->examplevalue = '\'repository*;cipc-*[;another reg. exp.]\'';
 $options['include']->shortoptions = array('o');
 $options['include']->description = get_string('includelist', 'local.ldap');
 $options['include']->required = false;
@@ -126,16 +127,21 @@ $options['contexts']->description = get_string('searchcontexts', 'local.ldap');
 $options['contexts']->required = false;
 
 $options['searchsub'] = new stdClass();
-$options['searchsub']->examplevalue = '1';
+$options['searchsub']->examplevalue = '0';
 $options['searchsub']->shortoptions = array('s');
 $options['searchsub']->description = get_string('searchsubcontexts', 'local.ldap');
 $options['searchsub']->required = false;
 
 $options['grouptype'] = new stdClass();
-$options['grouptype']->examplevalue = 'course | standard';
+$options['grouptype']->examplevalue = 'course|standard';
 $options['grouptype']->shortoptions = array('t');
 $options['grouptype']->description = get_string('grouptype', 'local.ldap');
 $options['grouptype']->required = false;
+
+$options['nocreate'] = new stdClass();
+$options['nocreate']->shortoptions = array('n');
+$options['nocreate']->description = get_string('nocreatemissinggroups', 'local.ldap');
+$options['nocreate']->required = false;
 
 
 $settings = new stdClass();
@@ -154,6 +160,7 @@ try {
     $onlycontexts = $cli->get_cli_param('contexts');
     $searchsub = $cli->get_cli_param('searchsub');
     $grouptype = $cli->get_cli_param('grouptype') == 'course' ? 'course' : 'standard';
+    $nocreate = $cli->get_cli_param('nocreate');
 }
 // we catch missing parameter and unknown institution
 catch (Exception $e) {
@@ -242,9 +249,12 @@ foreach ($auths as $auth) {
 
         // test whether this group exists within the institution
         if (!$dbgroup = get_record('group', 'shortname', $group, 'institution', $institutionname)) {
-
+             if ($nocreate) {
+                 $cli->cli_print ('skipping Mahara not existing group '. $group);
+                 continue;
+             }
             try {
-                $cli->cli_print ('creating group '.$group);
+                $cli->cli_print('creating group ' . $group);
                 $dbgroup = array();
                 $dbgroup['name'] = $institutionname . ' : ' . $group;
                 $dbgroup['institution'] = $institutionname;
@@ -260,14 +270,14 @@ foreach ($auths as $auth) {
             }
         } else {
             $groupid = $dbgroup->id;
-            $cli->cli_print ('group exists '.$group);
+            $cli->cli_print('group exists ' . $group);
 
         }
         // now it does  exist see what members should be added/removed
 
         $ldapusers = $instance->ldap_get_group_members($group);
         if ($CFG->debug_ldap_groupes) {
-             moodle_print_object($group.' : ', $ldapusers);
+            moodle_print_object($group . ' : ', $ldapusers);
         }
 
 
@@ -282,13 +292,15 @@ foreach ($auths as $auth) {
             moodle_print_object('nouvelle liste :', $members);
         }
 
-        $result = group_update_members($groupid, $members);
-            if ($result) {
-                $cli->cli_print(" ->   added : {$result['added']} removed : {$result['removed']} updated : {$result['updated']}");
-            }else {
-                $cli->cli_print('->  no change for '.$group);
-            }
+        unset($ldapusers); //try to save memory before memory consuming call to API
 
+        $result = group_update_members($groupid, $members);
+        if ($result) {
+            $cli->cli_print(" ->   added : {$result['added']} removed : {$result['removed']} updated : {$result['updated']}");
+        } else {
+            $cli->cli_print('->  no change for ' . $group);
+        }
+        unset ($members);
     }
 }
 

@@ -13,17 +13,19 @@ defined ('INTERNAL') || die();
 
 $string['cli_mahara_sync_users']='This command line PHP script will attempt to synchronize an institution list of Mahara accounts with an LDAP directory';
 
-$string['cli_mahara_sync_groups']='This command line PHP script will attempt to synchronize an institution list of groups with an LDAP directory';
+$string['cli_mahara_sync_groups']='This command line PHP script will attempt to synchronize an institution list of groups with an LDAP directory\n
+Missing groups will be created and named as \'institution name : LDAP group name\'';
 
 $string['institutionname'] = 'Name of the institution to process (required)';
 
 $string['searchcontexts']= 'Restrict searching in these contexts (override values set in authentication plugin)';
-$string['searchsubcontexts']='Also search in sub contexts (override values set in authentication plugin)';
+$string['searchsubcontexts']='search (1) or not (0) in sub contexts (override values set in authentication plugin)';
 
 $string['extrafilterattribute']='additional LDAP field to search';
 
-
 $string['nocreate']= 'do not create new accounts';
+$string['nocreatemissinggroups']='do not create LDAP groups if missing in Mahara\'s institution';
+
 $string['doupdate']= 'update existing Mahara accounts with LDAP data (long)';
 $string['dodelete']= 'delete Mahara accounts not anymore in LDAP' ;
 $string['dosuspend']= 'suspend Mahara accounts not anymore in LDAP';
@@ -32,10 +34,10 @@ $string['dosuspend']= 'suspend Mahara accounts not anymore in LDAP';
 $string['cannotdeleteandsuspend']= 'Cannot specify -d and -s at the same time';
 
 
-$string['includelist']='';
-$string['excludelist']='';
+$string['includelist']='process only LDAP groups matching these regular expressions in their names';
+$string['excludelist']='exclude LDAP groups matching these regular expressions in their names';
 
-$string['grouptype']='';
+$string['grouptype']='type of Mahara group to create , default is standard';
 
 /*
  *

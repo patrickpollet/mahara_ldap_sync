@@ -138,8 +138,11 @@ class GAAuthLdap extends AuthLdap {
                 continue;
             }
 
-
-            $resultg = ldap_search($ldapconnection, $context, $queryg);
+            if ($this->config['search_sub'] == 'yes') {
+                $resultg = ldap_search($ldapconnection, $context, $queryg);
+            } else {
+                $resultg = ldap_list($ldapconnection, $context, $queryg);
+            }
 
             if (!empty ($resultg) AND ldap_count_entries($ldapconnection, $resultg)) {
                 $groupe = ldap_get_entries($ldapconnection, $resultg);
@@ -222,9 +225,16 @@ class GAAuthLdap extends AuthLdap {
             while (!$fini) {
                 //recherche paginée par paquet de 1000
                 $attribut = $this->config['memberattribute'] . ";range=" . $start . '-' . $end;
-                $resultg = ldap_search($ldapconnection, $context, $queryg, array(
-                    $attribut
-                ));
+
+                if ($this->config['search_sub'] == 'yes') {
+                    $resultg = ldap_search($ldapconnection, $context, $queryg, array(
+                        $attribut
+                    ));
+                } else {
+                    $resultg = ldap_list($ldapconnection, $context, $queryg, array(
+                        $attribut
+                    ));
+                }
 
                 if (!empty ($resultg) AND ldap_count_entries($ldapconnection, $resultg)) {
                     $groupe = ldap_get_entries($ldapconnection, $resultg);
@@ -365,18 +375,18 @@ class GAAuthLdap extends AuthLdap {
 
             if ($this->config['search_sub'] == 'yes') {
                 // use ldap_search to find first user from subtree
-                $ldap_result = ldap_search($ldapconnection, $context, $filter,array($this->config['user_attribute']));
+                $ldap_result = ldap_search($ldapconnection, $context, $filter, array($this->config['user_attribute']));
 
             }
             else {
                 // search only in this context
-                $ldap_result = ldap_list($ldapconnection,$filter, array($this->config['user_attribute']));
+                $ldap_result = ldap_list($ldapconnection, $filter, array($this->config['user_attribute']));
             }
 
             if ($entry = ldap_first_entry($ldapconnection, $ldap_result)) {
                 do {
                     $value = ldap_get_values_len($ldapconnection, $entry, $this->config['user_attribute']);
-                    $value =$value[0];
+                    $value = $value[0];
                     array_push($ret, $value);
 
                 } while ($entry = ldap_next_entry($ldapconnection, $entry));
@@ -384,8 +394,6 @@ class GAAuthLdap extends AuthLdap {
             unset($ldap_result); // free mem
 
         }
-
-
 
 
         @ldap_close($ldapconnection);
@@ -422,8 +430,8 @@ function auth_instance_get_matching_instances($institutionname) {
 }
 
 
-function auth_instance_get_concerned_users  ($authid,$fieldstofetch) {
-    $result = get_records_select_array('usr', "authinstance = ".$authid,null,false,$fieldstofetch);
+function auth_instance_get_concerned_users($authid, $fieldstofetch) {
+    $result = get_records_select_array('usr', "authinstance = " . $authid, null, false, $fieldstofetch);
     $result = empty($result) ? array() : $result;
     return $result;
 
