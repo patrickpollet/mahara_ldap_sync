@@ -18,7 +18,7 @@ class GAAuthLdap extends AuthLdap {
      * Constructor.
      */
 
-    function __construct($instanceid) {
+    public function __construct($instanceid) {
         global $CFG;
         //fetch all instances data
         parent::__construct($instanceid);
@@ -38,7 +38,7 @@ class GAAuthLdap extends AuthLdap {
      * @param $key
      * @param $value
      */
-    function set_config($key, $value) {
+    public function set_config($key, $value) {
         $this->config[$key] = $value;
     }
 
@@ -46,7 +46,7 @@ class GAAuthLdap extends AuthLdap {
      * for debugging purpose
      * @return array  current config for printing
      */
-    function get_config() {
+    public function get_config() {
         return $this->config;
     }
 
@@ -55,7 +55,7 @@ class GAAuthLdap extends AuthLdap {
      * @return string[]
      */
 
-    function ldap_get_grouplist($filter = "*") {
+    public function ldap_get_grouplist($filter = "*") {
         /// returns all groups from ldap servers
 
         global $CFG;
@@ -105,7 +105,7 @@ class GAAuthLdap extends AuthLdap {
      * return string[] array of usernames
      */
 
-    function ldap_get_group_members_rfc($group) {
+    private function ldap_get_group_members_rfc($group) {
         global $CFG;
 
         $ret = array();
@@ -183,7 +183,7 @@ class GAAuthLdap extends AuthLdap {
      * recherche paginée voir http://forums.sun.com/thread.jspa?threadID=578347
      */
 
-    function ldap_get_group_members_ad($group) {
+    private function ldap_get_group_members_ad($group) {
         global $CFG;
 
         $ret = array();
@@ -284,7 +284,7 @@ class GAAuthLdap extends AuthLdap {
      * @param string $dnid
      * @param string $dn
      */
-    function get_account_bydn($dnid, $dn) {
+    private function get_account_bydn($dnid, $dn) {
         global $CFG;
         if ($this->config['memberattribute_isdn']) {
             $dn_tmp1 = explode(",", $dn);
@@ -327,7 +327,7 @@ class GAAuthLdap extends AuthLdap {
      *
      * @return string[] an array of username indexed by Moodle's userid
      */
-    function ldap_get_group_members($groupe) {
+    public function ldap_get_group_members($groupe) {
         global $DB;
         if ($this->config['user_type'] == "ad") {
             $members = $this->ldap_get_group_members_ad($groupe);
@@ -341,7 +341,7 @@ class GAAuthLdap extends AuthLdap {
     }
 
 
-    function ldap_get_users($extrafilter = '') {
+    public function ldap_get_users($extrafilter = '') {
         global $CFG;
 
         $ret = array();

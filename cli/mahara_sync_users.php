@@ -101,7 +101,7 @@ $options['contexts']->description = get_string('searchcontexts', 'local.ldap');
 $options['contexts']->required = false;
 
 $options['searchsub'] = new stdClass();
-$options['searchsub']->examplevalue = '1';
+$options['searchsub']->examplevalue = '0';
 $options['searchsub']->shortoptions = array('s');
 $options['searchsub']->description = get_string('searchsubcontexts', 'local.ldap');
 $options['searchsub']->required = false;
@@ -125,7 +125,7 @@ $options['nocreate']->required = false;
 
 
 $options['dosuspend'] = new stdClass();
-$options['dosuspend']->shortoptions = array('s');
+$options['dosuspend']->shortoptions = array('p');
 $options['dosuspend']->description = get_string('dosuspend', 'local.ldap');
 $options['dosuspend']->required = false;
 
