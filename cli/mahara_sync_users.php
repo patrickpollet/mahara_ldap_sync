@@ -77,7 +77,6 @@ $USER->reanimate(1, 1);
 
 require(get_config('libroot') . 'institution.php');
 require(get_config('libroot') . 'group.php');
-require(get_config('libroot') . 'searchlib.php');
 require_once(get_config('docroot') . 'auth/ldap/lib.php');
 require_once(dirname(dirname(__FILE__))) . '/lib.php';
 
@@ -134,6 +133,11 @@ $options['dodelete']->shortoptions = array('d');
 $options['dodelete']->description = get_string('dodelete', 'local.ldap');
 $options['dodelete']->required = false;
 
+$options['dryrun'] = new stdClass();
+$options['dryrun']->description = get_string('dryrun', 'local.ldap');
+$options['dryrun']->required = false;
+
+
 $settings = new stdClass();
 $settings->options = $options;
 $settings->info = get_string('cli_mahara_sync_users', 'local.ldap');
@@ -154,16 +158,19 @@ try {
     $nocreate = $cli->get_cli_param('nocreate');
     $dosuspend = $cli->get_cli_param('dosuspend');
     $dodelete = $cli->get_cli_param('dodelete');
+    $dryrun = $cli->get_cli_param('dryrun');
 
     if ($dosuspend && $dodelete) {
         throw new ParameterException (get_string('cannotdeleteandsuspend', 'local.ldap'));
     }
+
 }
 // we catch missing parameter and unknown institution
 catch (Exception $e) {
     $USER->logout(); // important
     cli::cli_exit($e->getMessage(), true);
 }
+
 
 
 $auths = auth_instance_get_matching_instances($institutionname);
@@ -173,9 +180,10 @@ if ($CFG->debug_ldap_groupes) {
 }
 
 if (count($auths) == 0) {
-    cli::cli_exit(get_string('cli_mahara_nomatchingauths', 'local.ldap'));
+    $cli->cli_exit(get_string('cli_mahara_nomatchingauths', 'local.ldap'));
 }
 
+execute_sql('CREATE TEMPORARY TABLE extusers (extusername VARCHAR(64), PRIMARY KEY (extusername))', false);
 
 // it is unlikely that there is mre than one LDAP per institution
 foreach ($auths as $auth) {
@@ -197,66 +205,59 @@ foreach ($auths as $auth) {
     }
 
     // fetch ldap users having the filter attribute on (caution maybe mutlivalued
+    // do it on a scalable version by keeping the LDAP users names in a temporary table
+    $nbldapusers = $instance->ldap_get_users_scalable('extusers', 'extusername', $extrafilterattribute);
+    $cli->cli_print('LDAP users found : ' . $nbldapusers);
 
-    $ldapusers = $instance->ldap_get_users($extrafilterattribute);
-    if ($CFG->debug_ldap_groupes) {
-        moodle_print_object("LDAP users : ", $ldapusers);
+    if ($nbldapusers == 0) {
+        $cli->cli_exit(get_string('cli_mahara_noldapusersfound', 'local.ldap'));
+        $USER->logout();
+
     }
 
-    $nbupdated = $nbcreated = $nbsuspended = $nbdeleted = $nbignored = $nbpresents = 0;
+    try {
+        $nbupdated = $nbcreated = $nbsuspended = $nbdeleted = $nbignored = $nbpresents = $nbunsuspended = 0;
 
-    // Define ldap attributes in user update
-    $ldapattributes = array();
-    $ldapattributes['firstname'] = $instanceconfig['firstnamefield'];
-    $ldapattributes['lastname'] = $instanceconfig['surnamefield'];
-    $ldapattributes['email'] = $instanceconfig['emailfield'];
-    $ldapattributes['studentid'] = $instanceconfig['studentidfield'];
-    $ldapattributes['preferredname'] = $instanceconfig['preferrednamefield'];
+        // Define ldap attributes in user update
+        $ldapattributes = array();
+        $ldapattributes['firstname'] = $instanceconfig['firstnamefield'];
+        $ldapattributes['lastname'] = $instanceconfig['surnamefield'];
+        $ldapattributes['email'] = $instanceconfig['emailfield'];
+        $ldapattributes['studentid'] = $instanceconfig['studentidfield'];
+        $ldapattributes['preferredname'] = $instanceconfig['preferrednamefield'];
 
-    // Match database and ldap entries and update in database if required
-    $fieldstoimport = array_keys($ldapattributes);
+        // Match database and ldap entries and update in database if required
+        $fieldstoimport = array_keys($ldapattributes);
 
-    // fields to fetch from usr table for existing users  (try to save memory
-    $fieldstofetch = array_keys($ldapattributes);
-    $fieldstofetch = array_merge($fieldstofetch, array('id', 'username', 'suspendedreason'));
-    $fieldstofetch = implode(',', $fieldstofetch);
-
-
-    if ($CFG->debug_ldap_groupes) {
-        moodle_print_object("LDAP attributes : ", $ldapattributes);
-    }
+        // fields to fetch from usr table for existing users  (try to save memory
+        $fieldstofetch = array_keys($ldapattributes);
+        $fieldstofetch = array_merge($fieldstofetch, array('id', 'username', 'suspendedreason'));
+        $fieldstofetch = implode(',', $fieldstofetch);
 
 
-    // we fetch only Mahara users of this institution concerned by this authinstance (either cas or ldap)
-    // and get also their suspended status since we may have to unsuspend them
-    // this serach cannot be done by a call to get_institutional_admin_search_results
-    // that does not support searching by auth instance id and do not return suspended status
+        if ($CFG->debug_ldap_groupes) {
+            moodle_print_object("LDAP attributes : ", $ldapattributes);
+        }
 
 
-    $data = auth_instance_get_concerned_users($auth->id, $fieldstofetch);
-    if ($CFG->debug_ldap_groupes) {
-        moodle_print_object("current members : ", $data);
-    }
-
-    $currentmembers = array();
-
-    foreach ($data as $datum) {
-        $currentmembers [$datum->username] = $datum;
-    }
-
-    unset($data); //save memory
-
-    if ($CFG->debug_ldap_groupes) {
-        moodle_print_object("current members  II : ", $currentmembers);
-    }
+        // we fetch only Mahara users of this institution concerned by this authinstance (either cas or ldap)
+        // and get also their suspended status since we may have to unsuspend them
+        // this search cannot be done by a call to get_institutional_admin_search_results
+        // that does not support searching by auth instance id and do not return suspended status
+        // and is not suitable for a massive number of users
 
 
-    foreach ($ldapusers as $ldapusername) {
-        if (isset($currentmembers[$ldapusername])) {
+        // users to update (known both in LDAP and Mahara usr table
+
+        $sql = " SELECT $fieldstofetch FROM extusers E ,usr U
+WHERE E.extusername= U.username and deleted=0  and U.authinstance=? order by U.username";
+
+        $rs = get_recordset_sql($sql, array($auth->id));
+        $cli->cli_print($rs->RecordCount() . ' users known to Mahara ');
+        while ($record = $rs->FetchRow()) {
             $nbpresents++;
-
+            $ldapusername = $record['username'];
             if ($doupdate) {
-                $user = $currentmembers[$ldapusername];
                 $cli->cli_print('updating user ' . $ldapusername);
                 // Retrieve information of user from LDAP
                 $ldapdetails = $instance->get_user_info($ldapusername, $ldapattributes);
@@ -266,30 +267,93 @@ foreach ($auths as $auth) {
                 foreach ($fieldstoimport as $field) {
                     $sanitizer = "sanitize_$field";
                     $ldapdetails[$field] = $sanitizer($ldapdetails[$field]);
-                    if (!empty($ldapdetails[$field]) && ($user->$field != $ldapdetails[$field])) {
-                        $user->$field = $ldapdetails[$field];
-                        set_profile_field($user->id, $field, $ldapdetails[$field]);
+                    if (!empty($ldapdetails[$field]) && ($record[$field] != $ldapdetails[$field])) {
+
+                        if (!$dryrun) {
+                            set_profile_field($user['id'], $field, $ldapdetails[$field]);
+                        }
                     }
                 }
-
                 //we also must update the student id in table usr_institution
+                //this call consumes ~1400 bytes that are not returned to pool ?
 
-                set_field('usr_institution', 'studentid', $user->studentid, 'usr', $user->id, 'institution', $institutionname);
+                if (!$dryrun) {
+                    set_field('usr_institution', 'studentid', $ldapdetails['studentid'], 'usr',
+                        $record['id'], 'institution', $institutionname);
+                }
+
+
                 //  pp_error_log ('maj compte II',$user);
 
-
-                $nbupdated++;
-                //unsuspend if was supended by me at a previous run
-                if (!empty($user->suspendedreason) && strstr(SUSPENDED_REASON, $user->suspendedreason) !== false) {
-                    unsuspend_user($user->id);
-                }
-                unset($user);
                 unset($ldapdetails);
+                unset($record);
+                $nbupdated++;
+            } else {
+                $cli->cli_print('no update for ' . $ldapusername);
             }
-            unset ($currentmembers[$ldapusername]);
+            //unsuspend if was suspended by me at a previous run
+            if (!empty($record['suspendedreason']) && strstr(SUSPENDED_REASON, $record['suspendedreason']) !== false) {
+                $cli->cli_print('unsuspending user ' . $ldapusername);
 
-        } else {
+                if (!$dryrun) {
+                    unsuspend_user($record['id']);
+                }
+                $nbunsuspended++;
+            }
+
+        }
+
+
+        //users to delete /suspend
+
+        $sql = " SELECT $fieldstofetch FROM usr U LEFT JOIN extusers E ON E.extusername = U.username
+WHERE U.authinstance =?   AND deleted  =0  AND E.extusername IS NULL
+ORDER BY U.username ASC ";
+
+        $rs = get_recordset_sql($sql, array($auth->id));
+        $cli->cli_print($rs->RecordCount() . ' users no anymore in LDAP ');
+        while ($record = $rs->FetchRow()) {
+
+            if ($dosuspend) {
+                if (!$record['suspendedreason']) { //if not already suspended for any reason ( me or some manual operation)
+                    $cli->cli_print('suspending user ' . $record['username']);
+                    if (!$dryrun) {
+                        suspend_user($record['id'], SUSPENDED_REASON . ' ' . time());
+                    }
+                    $nbsuspended++;
+
+                }
+            } else {
+                if ($dodelete) {
+                    $cli->cli_print('deleting user ' . $record['username']);
+                    if (!$dryrun) {
+                        delete_user($record['id']);
+                    }
+                    $nbdeleted++;
+
+                } else {
+                    // nothing to do
+                    $cli->cli_print('ignoring user ' . $record['username']);
+                    $nbignored++;
+                }
+            }
+
+        }
+
+        // users to create
+        // we edo it at the end since to is very memory consuming
+        // and often die with memory exhaution . Why ?
+
+
+        $sql = 'SELECT E.extusername FROM extusers E LEFT JOIN usr U ON E.extusername = U.username
+WHERE U.id IS NULL       ORDER BY  E.extusername';
+
+        $rs = get_recordset_sql($sql);
+        $cli->cli_print($rs->RecordCount() . ' LDAP users unknown to Mahara  ');
+        while ($record = $rs->FetchRow()) {
+            $ldapusername = $record['extusername'];
             if (!$nocreate) {
+                $cli->cli_print('creating user ' . $ldapusername);
                 // Retrieve information of user from LDAP
                 $ldapdetails = $instance->get_user_info($ldapusername, $ldapattributes);
                 $ldapdetails->username = $ldapusername; //not returned by LDAP
@@ -297,40 +361,36 @@ foreach ($auths as $auth) {
                 if ($CFG->debug_ldap_groupes) {
                     moodle_print_object("creation de ", $ldapdetails);
                 }
-                $cli->cli_print('creating user ' . $ldapusername);
-                create_user($ldapdetails, array(), $institutionname);
+                // conusnes also a lot of memory not returned to poll
+                if (!$dryrun) {
+                    create_user($ldapdetails, array(), $institutionname);
+                }
+
                 $nbcreated++;
-            }
-        }
-    }
-
-    // now currentmembers contains ldap/cas users that are not anymore in LDAP
-    foreach ($currentmembers as $memberusername => $member) {
-        if ($dosuspend) {
-            if (!$member->suspendedreason) { //if not already suspended for any reason ( me or some manual operation)
-                $cli->cli_print('suspending user ' . $memberusername);
-                suspend_user($member->id, SUSPENDED_REASON . ' ' . time());
-                $nbsuspended++;
-
-            }
-        } else {
-            if ($dodelete) {
-                $cli->cli_print('deleting user ' . $memberusername);
-                delete_user($member->id);
-                $nbdeleted++;
+                unset ($ldapdetails);
 
             } else {
-                // nothing to do
-                $cli->cli_print('ignoring user ' . $memberusername);
-                $nbignored++;
+                $cli->cli_print('ignoring LDAP user not in Mahara ' . $ldapusername);
             }
+            // if ($nbcreated > 500) break;
         }
-    }
-    cli::cli_print("$nbpresents $nbupdated $nbcreated $nbsuspended $nbdeleted $nbignored");
 
+
+    }
+    catch (Exception $e) {
+        //likely an out of memory error
+        $cli->cli_print("LDAP users : $nbpresents updated : $nbupdated unsuspended : $nbunsuspended created : $nbcreated suspended : $nbsuspended deleted $nbdeleted ignored  $nbignored");
+        $USER->logout(); // important
+        cli::cli_exit($e->getMessage(), true);
+
+    }
 }
 
+$cli->cli_print("LDAP users : $nbpresents updated : $nbupdated unsuspended : $nbunsuspended created : $nbcreated suspended : $nbsuspended deleted $nbdeleted ignored  $nbignored");
+
 $USER->logout(); // important
-cli::cli_exit("fini", true);
+$cli->cli_exit("fini", true);
+
+
 
 

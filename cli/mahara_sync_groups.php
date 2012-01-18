@@ -143,6 +143,10 @@ $options['nocreate']->shortoptions = array('n');
 $options['nocreate']->description = get_string('nocreatemissinggroups', 'local.ldap');
 $options['nocreate']->required = false;
 
+$options['dryrun'] = new stdClass();
+$options['dryrun']->description = get_string('dryrun', 'local.ldap');
+$options['dryrun']->required = false;
+
 
 $settings = new stdClass();
 $settings->options = $options;
@@ -161,6 +165,8 @@ try {
     $searchsub = $cli->get_cli_param('searchsub');
     $grouptype = $cli->get_cli_param('grouptype') == 'course' ? 'course' : 'standard';
     $nocreate = $cli->get_cli_param('nocreate');
+    $dryrun = $cli->get_cli_param('dryrun');
+
 }
 // we catch missing parameter and unknown institution
 catch (Exception $e) {
@@ -249,10 +255,10 @@ foreach ($auths as $auth) {
 
         // test whether this group exists within the institution
         if (!$dbgroup = get_record('group', 'shortname', $group, 'institution', $institutionname)) {
-             if ($nocreate) {
-                 $cli->cli_print ('skipping Mahara not existing group '. $group);
-                 continue;
-             }
+            if ($nocreate) {
+                $cli->cli_print('skipping Mahara not existing group ' . $group);
+                continue;
+            }
             try {
                 $cli->cli_print('creating group ' . $group);
                 $dbgroup = array();
@@ -262,7 +268,9 @@ foreach ($auths as $auth) {
                 $dbgroup['grouptype'] = $grouptype; // default standard (change to course)
                 $dbgroup['controlled'] = 1; //definitively
                 $nbadded++;
-                $groupid = group_create($dbgroup);
+                if (!$dryrun) {
+                    $groupid = group_create($dbgroup);
+                }
             }
             catch (Exception $ex) {
                 $cli->cli_print($ex->getMessage());
@@ -294,7 +302,7 @@ foreach ($auths as $auth) {
 
         unset($ldapusers); //try to save memory before memory consuming call to API
 
-        $result = group_update_members($groupid, $members);
+        $result = $dryrun ? false : group_update_members($groupid, $members);
         if ($result) {
             $cli->cli_print(" ->   added : {$result['added']} removed : {$result['removed']} updated : {$result['updated']}");
         } else {

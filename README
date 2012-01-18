@@ -1,4 +1,3 @@
-
 1) using git : in mahara's local directory execute the following command :
 
  git clone git@github.com:patrickpollet/mahara_ldap_sync.git
@@ -8,9 +7,9 @@ into mahara's local directory and rename patrickpollet-mahara_ldap_sync_xxxxx fo
 
 2)copy or symlink the file mahara_ldap_sync/lang/en.utf8/local.ldap.php into local/lang/en.utf8. You may have to create this directory
 
-
 3) you may have to edit the file mahara/auth/ldap/lib.php to replace all occurence of word private to protected.
 
-
 4) in case a new version is released on github just type on the command line 'git pull' within directory local/mahara_ldap_sync if you are using git
- or repeat setp 1bis otherwise.
+ or repeat step 1bis otherwise.
+
+Enjoy.

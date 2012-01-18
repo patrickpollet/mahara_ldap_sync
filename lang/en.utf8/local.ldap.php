@@ -30,7 +30,7 @@ $string['doupdate']= 'update existing Mahara accounts with LDAP data (long)';
 $string['dodelete']= 'delete Mahara accounts not anymore in LDAP' ;
 $string['dosuspend']= 'suspend Mahara accounts not anymore in LDAP';
 
-
+$string['dryrun']= 'dummy execution. Do not perform database operations';
 $string['cannotdeleteandsuspend']= 'Cannot specify -d and -s at the same time';
 
 
@@ -38,6 +38,9 @@ $string['includelist']='process only LDAP groups matching these regular expressi
 $string['excludelist']='exclude LDAP groups matching these regular expressions in their names';
 
 $string['grouptype']='type of Mahara group to create , default is standard';
+
+$string['cli_mahara_noldapusersfound']='no accounts found with your LDAP criteria. Server is down ? ';
+$string['cli_mahara_nomatchingauths']='no LDAP or CAS authentication plugin found for this institution';
 
 /*
  *

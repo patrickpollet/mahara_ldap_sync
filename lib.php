@@ -341,6 +341,14 @@ class GAAuthLdap extends AuthLdap {
     }
 
 
+
+    /**
+     * returns an array of usernames from al LDAP directory
+     * searching patameters are defined in configuration
+     * @param string $extrafilter  if present returns only users having some values in some LDAP attribute
+     * @return array  of strings
+     */
+
     public function ldap_get_users($extrafilter = '') {
         global $CFG;
 
@@ -403,6 +411,82 @@ class GAAuthLdap extends AuthLdap {
     }
 
 
+
+    /**
+     * fill a database table with usernames from al LDAP directory
+     * searching parameters are defined in configuration
+     * @param string tablename
+     * @param string columnname
+     * @param string $extrafilter  if present returns only users having some values in some LDAP attribute
+     * @return integer (nb of records added) or false in case of error
+     */
+
+    public function ldap_get_users_scalable($tablename,$columname='username', $extrafilter = '') {
+        global $CFG;
+
+        execute_sql ('TRUNCATE TABLE '.$tablename);
+
+        $ldapconnection = $this->ldap_connect();
+        if ($CFG->debug_ldap_groupes) {
+            moodle_print_object("connexion ldap: ", $ldapconnection);
+        }
+        if (!$ldapconnection) {
+            return false;
+        }
+
+        $filter = "(" . $this->config['user_attribute'] . "=*)";
+        if (!empty($this->config['objectclass'])) {
+            $filter .= "&(" . $this->config['objectclass'] . "))";
+        }
+        if ($extrafilter) {
+            $filter = "(&$filter($extrafilter))";
+        }
+        if ($CFG->debug_ldap_groupes) {
+            moodle_print_object("filter users ldap: ", $filter);
+        }
+
+        // get all contexts and look for first matching user
+        $ldap_contexts = explode(";", $this->config['contexts']);
+
+        $nbadded=0;
+
+        foreach ($ldap_contexts as $context) {
+            $context = trim($context);
+            if (empty($context)) {
+                continue;
+            }
+
+            if ($this->config['search_sub'] == 'yes') {
+                // use ldap_search to find first user from subtree
+                $ldap_result = ldap_search($ldapconnection, $context, $filter, array($this->config['user_attribute']));
+
+            }
+            else {
+                // search only in this context
+                $ldap_result = ldap_list($ldapconnection, $filter, array($this->config['user_attribute']));
+            }
+
+            if ($entry = ldap_first_entry($ldapconnection, $ldap_result)) {
+                do {
+                    $value = ldap_get_values_len($ldapconnection, $entry, $this->config['user_attribute']);
+                    $value = $value[0];
+                    //array_push($ret, $value);
+                    insert_record($tablename,array($columname=>addslashes($value)),false,false);
+                    $nbadded ++;
+
+                } while ($entry = ldap_next_entry($ldapconnection, $entry));
+            }
+            unset($ldap_result); // free mem
+
+        }
+
+
+        @ldap_close($ldapconnection);
+        return $nbadded;
+
+
+    }
+
 }
 
 
@@ -429,13 +513,20 @@ function auth_instance_get_matching_instances($institutionname) {
 
 }
 
-
+ /**
+  * caution non scalable of big installations
+  * @param $authid
+  * @param $fieldstofetch
+  * @return array
+  */
 function auth_instance_get_concerned_users($authid, $fieldstofetch) {
     $result = get_records_select_array('usr', "authinstance = " . $authid, null, false, $fieldstofetch);
     $result = empty($result) ? array() : $result;
     return $result;
 
 }
+
+
 
 function ldap_sync_filter_name($name, $includes, $excludes) {
     global $CFG;
