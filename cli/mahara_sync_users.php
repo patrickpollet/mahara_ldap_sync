@@ -210,13 +210,12 @@ foreach ($auths as $auth) {
     $cli->cli_print('LDAP users found : ' . $nbldapusers);
 
     if ($nbldapusers == 0) {
-        $cli->cli_exit(get_string('cli_mahara_noldapusersfound', 'local.ldap'));
         $USER->logout();
-
+        $cli->cli_exit(get_string('cli_mahara_noldapusersfound', 'local.ldap'));
     }
 
     try {
-        $nbupdated = $nbcreated = $nbsuspended = $nbdeleted = $nbignored = $nbpresents = $nbunsuspended = 0;
+        $nbupdated = $nbcreated = $nbsuspended = $nbdeleted = $nbignored = $nbpresents = $nbunsuspended = $nberrors= 0;
 
         // Define ldap attributes in user update
         $ldapattributes = array();
@@ -351,27 +350,34 @@ WHERE U.id IS NULL       ORDER BY  E.extusername';
         $rs = get_recordset_sql($sql);
         $cli->cli_print($rs->RecordCount() . ' LDAP users unknown to Mahara  ');
         while ($record = $rs->FetchRow()) {
-            $ldapusername = $record['extusername'];
-            if (!$nocreate) {
-                $cli->cli_print('creating user ' . $ldapusername);
-                // Retrieve information of user from LDAP
-                $ldapdetails = $instance->get_user_info($ldapusername, $ldapattributes);
-                $ldapdetails->username = $ldapusername; //not returned by LDAP
-                $ldapdetails->authinstance = $auth->id;
-                if ($CFG->debug_ldap_groupes) {
-                    moodle_print_object("creation de ", $ldapdetails);
-                }
-                // conusnes also a lot of memory not returned to poll
-                if (!$dryrun) {
-                    create_user($ldapdetails, array(), $institutionname);
-                }
+        	$ldapusername = $record['extusername'];
+        	if (!$nocreate) {
+        		$cli->cli_print('creating user ' . $ldapusername);
+        		// Retrieve information of user from LDAP
+        		$ldapdetails = $instance->get_user_info($ldapusername, $ldapattributes);
+        		$ldapdetails->username = $ldapusername; //not returned by LDAP
+        		$ldapdetails->authinstance = $auth->id;
+        		if ($CFG->debug_ldap_groupes) {
+        			moodle_print_object("creation de ", $ldapdetails);
+        		}
 
-                $nbcreated++;
-                unset ($ldapdetails);
+        		if (record_exists('usr', 'email', $ldapdetails->email)
+        		    || record_exists('artefact_internal_profile_email', 'email', $ldapdetails->email)) {
+        			$cli->cli_print(get_string('emailalreadytaken', 'auth.internal') .' '. $ldapusername . ' '.$ldapdetails->email);
+        			$nberrors ++;
+        		} else {
+        			// consumes also a lot of memory not returned to poll
+        			if (!$dryrun) {
+        				create_user($ldapdetails, array(), $institutionname);
+        			}
+        			$nbcreated++;
+        		}
+        		
+        		unset ($ldapdetails);
 
-            } else {
-                $cli->cli_print('ignoring LDAP user not in Mahara ' . $ldapusername);
-            }
+        	} else {
+        		$cli->cli_print('ignoring LDAP user not in Mahara ' . $ldapusername);
+        	}
             // if ($nbcreated > 500) break;
         }
 
@@ -379,14 +385,14 @@ WHERE U.id IS NULL       ORDER BY  E.extusername';
     }
     catch (Exception $e) {
         //likely an out of memory error
-        $cli->cli_print("LDAP users : $nbpresents updated : $nbupdated unsuspended : $nbunsuspended created : $nbcreated suspended : $nbsuspended deleted $nbdeleted ignored  $nbignored");
+        $cli->cli_print("LDAP users : $nbpresents updated : $nbupdated unsuspended : $nbunsuspended created : $nbcreated suspended : $nbsuspended deleted : $nbdeleted ignored : $nbignored errors : $nberrors");
         $USER->logout(); // important
         cli::cli_exit($e->getMessage(), true);
 
     }
 }
 
-$cli->cli_print("LDAP users : $nbpresents updated : $nbupdated unsuspended : $nbunsuspended created : $nbcreated suspended : $nbsuspended deleted $nbdeleted ignored  $nbignored");
+$cli->cli_print("LDAP users : $nbpresents updated : $nbupdated unsuspended : $nbunsuspended created : $nbcreated suspended : $nbsuspended deleted : $nbdeleted ignored : $nbignored errors :$nberrors");
 
 $USER->logout(); // important
 $cli->cli_exit("fini", true);
