@@ -264,21 +264,27 @@ WHERE E.extusername= U.username and deleted=0  and U.authinstance=? order by U.u
                 $ldapdetails = (array)$ldapdetails;
 
                 foreach ($fieldstoimport as $field) {
-                    $sanitizer = "sanitize_$field";
-                    $ldapdetails[$field] = $sanitizer($ldapdetails[$field]);
-                    if (!empty($ldapdetails[$field]) && ($record[$field] != $ldapdetails[$field])) {
-
-                        if (!$dryrun) {
-                            set_profile_field($user['id'], $field, $ldapdetails[$field]);
-                        }
-                    }
+                	if (isset( $ldapdetails[$field] )) { // some LDAP values missing ?
+                    	$sanitizer = "sanitize_$field";
+                    	$ldapdetails[$field] = $sanitizer($ldapdetails[$field]);
+                    	if (!empty($ldapdetails[$field]) && ($record[$field] != $ldapdetails[$field])) {
+                        	if (!$dryrun) {
+                            	set_profile_field($record['id'], $field, $ldapdetails[$field]);
+                        	}
+                    	}
+                	} else {  // signal the error
+                		$cli->cli_print ('user '.$ldapusername. ' has no LDAP value for '.$field);
+                		$nberrors++;
+                	}
                 }
                 //we also must update the student id in table usr_institution
                 //this call consumes ~1400 bytes that are not returned to pool ?
 
                 if (!$dryrun) {
-                    set_field('usr_institution', 'studentid', $ldapdetails['studentid'], 'usr',
-                        $record['id'], 'institution', $institutionname);
+                	if (isset( $ldapdetails['studentid'])) { // caution may be missing ?
+                    	set_field('usr_institution', 'studentid', $ldapdetails['studentid'], 'usr',
+                        	$record['id'], 'institution', $institutionname);
+                	}    
                 }
 
 
