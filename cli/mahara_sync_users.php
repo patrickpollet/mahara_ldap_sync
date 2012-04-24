@@ -327,6 +327,8 @@ ORDER BY U.username ASC ";
                     }
                     $nbsuspended++;
 
+                } else {
+            		$cli->cli_print('user '.$record['username']. ' already suspended by '.$record['suspendedreason']);
                 }
             } else {
                 if ($dodelete) {
