@@ -323,7 +323,7 @@ ORDER BY U.username ASC ";
                 if (!$record['suspendedreason']) { //if not already suspended for any reason ( me or some manual operation)
                     $cli->cli_print('suspending user ' . $record['username']);
                     if (!$dryrun) {
-                        suspend_user($record['id'], SUSPENDED_REASON . ' ' . time());
+                        suspend_user($record['id'], SUSPENDED_REASON . ' ' .time().' ('. format_date(time()).')');
                     }
                     $nbsuspended++;
 

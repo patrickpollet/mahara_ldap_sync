@@ -97,6 +97,10 @@ require_once(dirname(dirname(__FILE__))) . '/lib.php';
 
 
 $CFG->debug_ldap_groupes = false;
+//testing flag force a LDAP search for mahara username even if the user's DN
+//is in the form xx=maharausername,ou=xxxx,dc=yyyyy ....  
+$CFG->no_speedup_ldap = true;
+
 
 $cli = get_cli();
 
@@ -309,6 +313,7 @@ foreach ($auths as $auth) {
             $cli->cli_print('->  no change for ' . $group);
         }
         unset ($members);
+        //break;
     }
 }
 
