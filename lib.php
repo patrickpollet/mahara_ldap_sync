@@ -29,6 +29,13 @@ class GAAuthLdap extends AuthLdap {
 		//argh phpldap convert uniqueMember to lowercase array keys when returning the list of members  ...
 		$this->config['memberattribute'] = strtolower(!empty($CFG->ldap_member_attribute) ? $CFG->ldap_member_attribute : 'uniquemember');
 		$this->config['memberattribute_isdn'] = !empty($CFG->ldap_member_attribute_isdn) ? $CFG->ldap_member_attribute_isdn : 1;
+		// new setting 
+		$this->config['process_nested_groups']=!empty($CFG->ldap_process_nested_groups )?$CFG->ldap_process_nested_groups :false;
+		/**
+		 * cache for found groups dn
+		 * used for nested groups processing
+		 */
+		$this->config['groups_dn_cache']=array();
 
 	}
 
@@ -52,7 +59,7 @@ class GAAuthLdap extends AuthLdap {
 
 	/**
 	 * return all groups declared in LDAP
-	 * DOES NOT SUPPORT PAGED RESULTS if more than a 1000 (AD) 
+	 * DOES NOT SUPPORT PAGED RESULTS if more than a 1000 (AD)
 	 * @return string[]
 	 */
 
@@ -94,7 +101,16 @@ class GAAuthLdap extends AuthLdap {
 
 			//add found groups to list
 			for ($i = 0; $i < count($groups) - 1; $i++) {
-				array_push($fresult, ($groups[$i][$this->config['group_attribute']][0]));
+				$group_cn=($groups[$i][$this->config['group_attribute']][0]);
+				array_push($fresult, $group_cn );
+
+			 // keep the dn/cn in cache for later processing of nested groups
+				if ($this->config['process_nested_groups']) {
+					$group_dn=$groups[$i]['dn'];
+					$this->config['groups_dn_cache'][$group_dn]=$group_cn;
+				}
+
+
 			}
 		}
 		@ldap_close($ldapconnection);
@@ -123,7 +139,7 @@ class GAAuthLdap extends AuthLdap {
 			return $ret;
 		}
 
-		$queryg = "(&(cn=" . trim($group) . ")(objectClass={$this->config['group_class']}))";
+		$queryg = "(&({$this->config['group_attribute']}=" . trim($group) . ")(objectClass={$this->config['group_class']}))";
 		if ($CFG->debug_ldap_groupes) {
 			moodle_print_object("queryg: ", $queryg);
 		}
@@ -151,22 +167,26 @@ class GAAuthLdap extends AuthLdap {
 					moodle_print_object("groupe: ", $groupe);
 				}
 
-				//todo tester existence du groupe !!!
 				for ($g = 0; $g < (sizeof($groupe[0][$this->config['memberattribute']]) - 1); $g++) {
 
 					$membre = trim($groupe[0][$this->config['memberattribute']][$g]);
-					if ($membre != "") { //*3
-						//if ($CFG->debug_ldap_groupes) {
-						//    moodle_print_object("membre : ", $membre);
-						//}
+					if ($membre != "") {
 						if ($this->config['memberattribute_isdn']) {
-							$membre = $this->get_account_bydn($this->config['memberattribute'], $membre);
+							//rev 1.2 nested groups
+							if ($this->config['process_nested_groups'] && ($group_cn=$this->is_ldap_group($membre))) {
+								if ($CFG->debug_ldap_groupes){
+									moodle_print_object("processing nested group ", $membre);
+								}
+								//recursive call
+								$tmp=$this->ldap_get_group_members_rfc ($group_cn);
+								$ret=array_merge($ret,$tmp);
+							} else {
+								$membre = $this->get_account_bydn($this->config['memberattribute'], $membre);
+								if ($membre) {
+									$ret[] = $membre;
+								}
+							}
 						}
-
-						if ($membre) {
-							$ret[] = $membre;
-						}
-
 					}
 				}
 			}
@@ -201,7 +221,7 @@ class GAAuthLdap extends AuthLdap {
 			$group = $textlib->convert($group, 'utf-8', $this->config['ldapencoding']);
 		}
 
-		$queryg = "(&(cn=" . trim($group) . ")(objectClass={$this->config['group_class']}))";
+		$queryg = "(&({$this->config['group_attribute']}=" . trim($group) . ")(objectClass={$this->config['group_class']}))";
 		if ($CFG->debug_ldap_groupes) {
 			moodle_print_object("queryg: ", $queryg);
 		}
@@ -251,20 +271,25 @@ class GAAuthLdap extends AuthLdap {
 
 					for ($g = 0; $g < (sizeof($groupe[0][$attribut]) - 1); $g++) {
 						$membre = trim($groupe[0][$this->config['memberattribute']][$g]);
-						if ($membre != "") { //*3
-							// if ($CFG->debug_ldap_groupes) {
-							//     moodle_print_object("membre : ", $membre);
-								// }
-								if ($this->config['memberattribute_isdn']) {
-
+						if ($membre != "") {
+							if ($this->config['memberattribute_isdn']) {
+								//rev 1.2 nested groups
+								if ($this->config['process_nested_groups'] && ($group_cn=$this->is_ldap_group($membre))) {
+									if ($CFG->debug_ldap_groupes){
+										moodle_print_object("processing nested group ", $membre);
+									}
+									//recursive call
+									$tmp=$this->ldap_get_group_members_ad ($group_cn);
+									$ret=array_merge($ret,$tmp);
+								} else {
 									$membre = $this->get_account_bydn($this->config['memberattribute'], $membre);
+									if ($membre) {
+										$ret[] = $membre;
+									}
 								}
-
-								if ($membre) {
-									$ret[] = $membre;
-								}
-
+							}
 						}
+
 					}
 				} else {
 					$fini = true;
@@ -273,9 +298,9 @@ class GAAuthLdap extends AuthLdap {
 				$end = $end + $size;
 			}
 		}
-		//if ($CFG->debug_ldap_groupes) {
-		//    moodle_print_object("retour get_g_m ", $ret);
-		// }
+		if ($CFG->debug_ldap_groupes) {
+		    moodle_print_object("retour get_g_m ", $ret);
+		}
 		@ldap_close($ldapconnection);
 		return $ret;
 	}
@@ -283,12 +308,12 @@ class GAAuthLdap extends AuthLdap {
 	/**
 	 * should return a Mahara account from its LDAP dn
 	 * split the $dn and if naming attribute = Mahara user_attribute returns it
-	 * otherwise perform a LDAP search 
-	 * @uses $CFG->no_speedup_ldap to force a LDAP search 
+	 * otherwise perform a LDAP search
+	 * @uses $CFG->no_speedup_ldap to force a LDAP search
 	 * @uses $CFG->debug_ldap_groupes to be talkative
 	 * @param string $dnid  something like member (not used)
 	 * @param string $dn    uid=jdoe,ou=people,dc=... or cn=john doe,ou=people,dc=...
-	 * @return string Mahara username or false 
+	 * @return string Mahara username or false
 	 */
 	private function get_account_bydn($dnid, $dn) {
 		global $CFG;
@@ -307,7 +332,7 @@ class GAAuthLdap extends AuthLdap {
 					// case when user's DN is NOT xx=maharausername,ou=xxxx,dc=yyyy
 					// quite common with AD where DN is cn=user fullname,ou=xxxx
 					// we must do another LDAP search to retrieve Mahara username from LDAP
-					// since we call ldap_get_users, we do not support groups whithin group 
+					// since we call ldap_get_users, we do not support groups whithin group
 					// (usually added as cn=groupxxxx,ou=....)
 
 					if ($CFG->debug_ldap_groupes) {
@@ -341,6 +366,20 @@ class GAAuthLdap extends AuthLdap {
 		} else {
 			return $dn;
 		}
+	}
+
+
+	/**
+	 * search the group cn in group names cache
+	 * this is definitively faster than searching AGAIN LDAP for this dn with class=group...
+	 * @param string $dn  the group DN
+	 * @return string the group CN or false
+	 */
+	private function is_ldap_group($dn) {
+		if (empty($this->config['process_nested_groups'])) {
+			return false; // not supported by config
+		}
+		return !empty($this->config['groups_dn_cache'][$dn])? $this->config['groups_dn_cache'][$dn]:false ;
 	}
 
 	/**
@@ -437,7 +476,7 @@ class GAAuthLdap extends AuthLdap {
 	/**
 	 * fill a database table with usernames from al LDAP directory
 	 * searching parameters are defined in configuration
-	 * DOES NOT SUPPORT PAGED RESULTS if more than a 1000 (AD) 
+	 * DOES NOT SUPPORT PAGED RESULTS if more than a 1000 (AD)
 	 * @param string tablename
 	 * @param string columnname
 	 * @param string $extrafilter  if present returns only users having some values in some LDAP attribute

@@ -96,7 +96,7 @@ require_once(get_config('docroot') . 'auth/ldap/lib.php');
 require_once(dirname(dirname(__FILE__))) . '/lib.php';
 
 
-$CFG->debug_ldap_groupes = false;
+$CFG->debug_ldap_groupes = true;
 //testing flag force a LDAP search for mahara username even if the user's DN
 //is in the form xx=maharausername,ou=xxxx,dc=yyyyy ....  
 $CFG->no_speedup_ldap = true;
@@ -236,6 +236,11 @@ foreach ($auths as $auth) {
     if ($searchsub !== false) {
         $instance->set_config('search_sub', $searchsub ? 'yes' : 'no');
     }
+    
+    //testing code process nested groups
+    // to enable it set CFG->ldap_process_nested_groups  to 1 in config.php 
+    //$instance->set_config('process_nested_groups',true);
+    
 
     if ($CFG->debug_ldap_groupes) {
         moodle_print_object("config. LDAP : ", $instance->get_config());
@@ -246,6 +251,11 @@ foreach ($auths as $auth) {
     if ($CFG->debug_ldap_groupes) {
         moodle_print_object("groupes non filtrès : ", $groups);
     }
+    
+    if ($CFG->debug_ldap_groupes) {
+        moodle_print_object("config. LDAP : ", $instance->get_config());
+    }
+    
     $nbadded = 0;
     foreach ($groups as $group) {
         if (!ldap_sync_filter_name($group, $includelist, $excludelist)) {
