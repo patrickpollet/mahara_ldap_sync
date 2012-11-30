@@ -99,7 +99,7 @@ require_once(dirname(dirname(__FILE__))) . '/lib.php';
 $CFG->debug_ldap_groupes = true;
 //testing flag force a LDAP search for mahara username even if the user's DN
 //is in the form xx=maharausername,ou=xxxx,dc=yyyyy ....  
-$CFG->no_speedup_ldap = true;
+//$CFG->no_speedup_ldap = true;
 
 
 $cli = get_cli();

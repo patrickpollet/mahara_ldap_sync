@@ -368,10 +368,16 @@ WHERE U.id IS NULL       ORDER BY  E.extusername';
         		if ($CFG->debug_ldap_groupes) {
         			moodle_print_object("creation de ", $ldapdetails);
         		}
-
-        		if (record_exists('usr', 'email', $ldapdetails->email)
-        		    || record_exists('artefact_internal_profile_email', 'email', $ldapdetails->email)) {
-        			$cli->cli_print(get_string('emailalreadytaken', 'auth.internal') .' '. $ldapusername . ' '.$ldapdetails->email);
+                //check for used email
+        		if (($d1=get_record('usr', 'email', $ldapdetails->email)) 
+        		    || ($d2=get_record('artefact_internal_profile_email', 'email', $ldapdetails->email))) {
+        		    if (empty($d1)) {
+        		    	$d1=get_record('usr','id',$d2->owner);
+        		    }
+        		    if ($CFG->debug_ldap_groupes) {
+        		    	moodle_print_object("collision email ",$d1);
+        		    }	
+        			$cli->cli_print(get_string('emailalreadytaken', 'auth.internal') .' '. $d1->username . ' '.$ldapdetails->email);
         			$nberrors ++;
         		} else {
         			// consumes also a lot of memory not returned to poll

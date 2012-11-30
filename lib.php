@@ -15,6 +15,12 @@
 class GAAuthLdap extends AuthLdap {
 
 	/**
+	 * avoid infinite loop with nested groups in 'funny' directories
+	 * @var array
+	 */
+	var $anti_recursion_array;
+
+	/**
 	 * Constructor.
 	 */
 
@@ -29,13 +35,14 @@ class GAAuthLdap extends AuthLdap {
 		//argh phpldap convert uniqueMember to lowercase array keys when returning the list of members  ...
 		$this->config['memberattribute'] = strtolower(!empty($CFG->ldap_member_attribute) ? $CFG->ldap_member_attribute : 'uniquemember');
 		$this->config['memberattribute_isdn'] = !empty($CFG->ldap_member_attribute_isdn) ? $CFG->ldap_member_attribute_isdn : 1;
-		// new setting 
+		// new setting
 		$this->config['process_nested_groups']=!empty($CFG->ldap_process_nested_groups )?$CFG->ldap_process_nested_groups :false;
 		/**
 		 * cache for found groups dn
 		 * used for nested groups processing
 		 */
 		$this->config['groups_dn_cache']=array();
+		$this->anti_recursion_array=array();
 
 	}
 
@@ -177,8 +184,19 @@ class GAAuthLdap extends AuthLdap {
 								if ($CFG->debug_ldap_groupes){
 									moodle_print_object("processing nested group ", $membre);
 								}
+								// in case of funny directory where groups are member of groups
+								if (array_key_exists($membre,$this->anti_recursion_array)) {
+									if ($CFG->debug_ldap_groupes){
+										moodle_print_object("infinite loop detected skipping", $membre);
+									}
+									unset($this->anti_recursion_array[$membre]);
+									continue;
+								}
+
 								//recursive call
+								$this->anti_recursion_array[$membre]=1;
 								$tmp=$this->ldap_get_group_members_rfc ($group_cn);
+								unset($this->anti_recursion_array[$membre]);
 								$ret=array_merge($ret,$tmp);
 							} else {
 								$membre = $this->get_account_bydn($this->config['memberattribute'], $membre);
@@ -278,8 +296,18 @@ class GAAuthLdap extends AuthLdap {
 									if ($CFG->debug_ldap_groupes){
 										moodle_print_object("processing nested group ", $membre);
 									}
+									// in case of funny directory where groups are member of groups
+									if (array_key_exists($membre,$this->anti_recursion_array)) {
+										if ($CFG->debug_ldap_groupes){
+											moodle_print_object("infinite loop detected skipping", $membre);
+										}
+										unset($this->anti_recursion_array[$membre]);
+										continue;
+									}
 									//recursive call
+									$this->anti_recursion_array[$membre]=1;
 									$tmp=$this->ldap_get_group_members_ad ($group_cn);
+									unset($this->anti_recursion_array[$membre]);
 									$ret=array_merge($ret,$tmp);
 								} else {
 									$membre = $this->get_account_bydn($this->config['memberattribute'], $membre);
@@ -299,7 +327,7 @@ class GAAuthLdap extends AuthLdap {
 			}
 		}
 		if ($CFG->debug_ldap_groupes) {
-		    moodle_print_object("retour get_g_m ", $ret);
+			moodle_print_object("retour get_g_m ", $ret);
 		}
 		@ldap_close($ldapconnection);
 		return $ret;
