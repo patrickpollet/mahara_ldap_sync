@@ -209,7 +209,7 @@ foreach ($auths as $auth) {
     $nbldapusers = $instance->ldap_get_users_scalable('extusers', 'extusername', $extrafilterattribute);
     $cli->cli_print('LDAP users found : ' . $nbldapusers);
 
-    if ($nbldapusers == 0) {
+    if ($nbldapusers <99 ) {  //sécurité avec cipcauth
         $USER->logout();
         $cli->cli_exit(get_string('cli_mahara_noldapusersfound', 'local.ldap'));
     }
@@ -291,13 +291,16 @@ WHERE E.extusername= U.username and deleted=0  and U.authinstance=? order by U.u
                 //  pp_error_log ('maj compte II',$user);
 
                 unset($ldapdetails);
-                unset($record);
+               
                 $nbupdated++;
             } else {
                 $cli->cli_print('no update for ' . $ldapusername);
             }
+            
+           // print_r($record);
+            
             //unsuspend if was suspended by me at a previous run
-            if (!empty($record['suspendedreason']) && strstr(SUSPENDED_REASON, $record['suspendedreason']) !== false) {
+            if (!empty($record['suspendedreason']) && strstr($record['suspendedreason'],SUSPENDED_REASON) !== false) {
                 $cli->cli_print('unsuspending user ' . $ldapusername);
 
                 if (!$dryrun) {
@@ -307,7 +310,6 @@ WHERE E.extusername= U.username and deleted=0  and U.authinstance=? order by U.u
             }
 
         }
-
 
         //users to delete /suspend
 

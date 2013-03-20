@@ -43,6 +43,14 @@ class GAAuthLdap extends AuthLdap {
 		 */
 		$this->config['groups_dn_cache']=array();
 		$this->anti_recursion_array=array();
+		
+		
+		
+		$this->config['cohort_synching_ldap_attribute_attribute'] = 
+		   !empty($CFG->cohort_synching_ldap_attribute_attribute)?
+		          $CFG->cohort_synching_ldap_attribute_attribute:
+		          'eduPersonAffiliation';
+       
 
 	}
 
@@ -433,6 +441,8 @@ class GAAuthLdap extends AuthLdap {
 
 	/**
 	 * returns an array of usernames from al LDAP directory
+	 * DO NOT USE ANYMORE for synching users Not scalable
+	 * used for synching Mahara's groups with some LDAP attribute
 	 * searching patameters are defined in configuration
 	 * @param string $extrafilter  if present returns only users having some values in some LDAP attribute
 	 * @return array  of strings
@@ -576,8 +586,113 @@ class GAAuthLdap extends AuthLdap {
 
 
 	}
+	
+	 /**
+     * 
+     * returns the distinct values of the target LDAP attribute
+     * these will be the names of the synched Mahara groups
+     * @returns array of string 
+     */
+    function get_attribute_distinct_values() {
+       
+      
+        global $CFG, $DB;
+        // only these groups will be synched 
+        if (!empty($this->config->cohort_synching_ldap_attribute_idnumbers )) {
+            return $this->config->cohort_synching_ldap_attribute_idnumbers ;
+        }
+        
+        
+        //build a filter to fetch all users having something in the target LDAP attribute 
+        $filter = '('.$this->config['user_attribute'].'=*)';
+    	if (!empty($this->config['objectclass'])) {
+			$filter .= "&(" . $this->config['objectclass'] . "))";
+		}
+        $filter='(&'.$filter.'('.$this->config['cohort_synching_ldap_attribute_attribute'].'=*))';
+        
+        if ($CFG->debug_ldap_groupes) {
+            moodle_print_object('looking for ',$filter);
+        }
 
-}
+        $ldapconnection = $this->ldap_connect();
+
+   		$ldap_contexts = explode(";", $this->config['contexts']);
+   		
+        $matchings=array();
+
+        foreach ($ldap_contexts as $context) {
+            $context = trim($context);
+            if (empty($context)) {
+                continue;
+            }
+
+            if ($this->config['search_sub'] == 'yes') {
+                // Use ldap_search to find first user from subtree
+                $ldap_result = ldap_search($ldapconnection, $context,
+                                           $filter,
+                                           array($this->cohort_synching_ldap_attribute_attribute));
+            } else {
+                // Search only in this context
+                $ldap_result = ldap_list($ldapconnection, $context,
+                                         $filter,
+                                         array($this->cohort_synching_ldap_attribute_attribute));
+            }
+
+            if(!$ldap_result) {
+                continue;
+            }
+
+            // this API function returns all attributes as an array 
+            // wether they are single or multiple 
+            $users = $this->ldap_get_entries($ldapconnection, $ldap_result);
+            
+            // Add found DISTINCT values to list
+           for ($i = 0; $i < count($users); $i++) {
+               $count=$users[$i][$this->config['cohort_synching_ldap_attribute_attribute']]['count'];
+               for ($j=0; $j <$count; $j++) {
+               	/*
+                   $value=  textlib::convert($users[$i][$this->config['cohort_synching_ldap_attribute_attribute']][$j],
+                                $this->config->ldapencoding, 'utf-8');
+                */                
+               	 $value=  $users[$i][$this->config['cohort_synching_ldap_attribute_attribute']][$j];
+                  if (! in_array ($value, $matchings)) {
+                       array_push($matchings,$value);
+                  }
+               }
+           }
+        }
+
+        ldap_close($ldapconnection);
+        return $matchings;
+    }
+
+
+    function get_users_having_attribute_value ($attributevalue) {
+    	global $CFG, $DB;
+    	//build a filter
+
+
+    	$filter=$this->config['cohort_synching_ldap_attribute_attribute'].'='.
+    	        $this->filter_addslashes($attributevalue);
+
+    	// call Moodle ldap_get_userlist that return it as an array with user attributes names
+    	$matchings=$this->ldap_get_users($filter);
+    	// return the FIRST entry found
+    	if (empty($matchings)) {
+    		if ($CFG->debug_ldap_groupes) {
+    			moodle_print_object('not found','');
+    		}
+    		return array();
+    	}
+     	if ($CFG->debug_ldap_groupes) {
+     		moodle_print_object('found ',count($matchings). ' matching users in LDAP');
+     	}
+
+        return $matchings;
+            
+    }
+    
+}	
 
 
 /**
