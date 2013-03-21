@@ -180,8 +180,8 @@ catch (Exception $e) {
 
 if ($CFG->debug_ldap_groupes) {
     moodle_print_object("institution : ", $institution);
-    moodle_print_object("liste exclusion : ", $excludelist);
-    moodle_print_object("liste inclusion : ", $includelist);
+    moodle_print_object("exclusion list : ", $excludelist);
+    moodle_print_object("inclusion list : ", $includelist);
 
 }
 
@@ -209,9 +209,7 @@ $limit = 0;
 // from the table usr_institution and not from the table user ...
 // we don't need it here
 $data = get_institutional_admin_search_results($params, $limit);
-if ($CFG->debug_ldap_groupes) {
-    moodle_print_object("current members  : ", $data);
-}
+
 // map user's id to username for easy retrieving
 $currentmembers = array();
 foreach ($data['data'] as $datum) {
@@ -220,7 +218,7 @@ foreach ($data['data'] as $datum) {
 unset ($data); // save memory
 
 if ($CFG->debug_ldap_groupes) {
-    moodle_print_object("current members  II : ", $currentmembers);
+    moodle_print_object("current members : ".count($currentmembers).' ', $currentmembers);
 }
 
 // it is unlikely that there is mre than one LDAP per institution
@@ -249,12 +247,10 @@ foreach ($auths as $auth) {
 
     $groups = $instance->ldap_get_grouplist();
     if ($CFG->debug_ldap_groupes) {
-        moodle_print_object("groupes non filtrès : ", $groups);
+        moodle_print_object("Found LDAP groups  : ", $groups);
     }
     
-    if ($CFG->debug_ldap_groupes) {
-        moodle_print_object("config. LDAP : ", $instance->get_config());
-    }
+ 
     
     $nbadded = 0;
     foreach ($groups as $group) {
@@ -263,7 +259,7 @@ foreach ($auths as $auth) {
         }
 
         if ($CFG->debug_ldap_groupes) {
-            moodle_print_object("traitement du groupe  : ", $group);
+            moodle_print_object("processing group  : ", $group);
         }
 
 
@@ -310,8 +306,8 @@ foreach ($auths as $auth) {
                 $members[$id] = 'member';
             }
         }
-        if ($CFG->debug_ldap_groupes) {
-            moodle_print_object('nouvelle liste :', $members);
+    if ($CFG->debug_ldap_groupes) {
+            moodle_print_object('new members list : '.count($members).' ', $members);
         }
 
         unset($ldapusers); //try to save memory before memory consuming call to API

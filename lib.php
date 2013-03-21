@@ -43,14 +43,6 @@ class GAAuthLdap extends AuthLdap {
 		 */
 		$this->config['groups_dn_cache']=array();
 		$this->anti_recursion_array=array();
-		
-		
-		
-		$this->config['cohort_synching_ldap_attribute_attribute'] = 
-		   !empty($CFG->cohort_synching_ldap_attribute_attribute)?
-		          $CFG->cohort_synching_ldap_attribute_attribute:
-		          'eduPersonAffiliation';
-       
 
 	}
 
@@ -608,7 +600,7 @@ class GAAuthLdap extends AuthLdap {
     	if (!empty($this->config['objectclass'])) {
 			$filter .= "&(" . $this->config['objectclass'] . "))";
 		}
-        $filter='(&'.$filter.'('.$this->config['cohort_synching_ldap_attribute_attribute'].'=*))';
+        $filter='(&'.$filter.'('.$this->config['group_synching_ldap_attribute_attribute'].'=*))';
         
         if ($CFG->debug_ldap_groupes) {
             moodle_print_object('looking for ',$filter);
@@ -630,12 +622,12 @@ class GAAuthLdap extends AuthLdap {
                 // Use ldap_search to find first user from subtree
                 $ldap_result = ldap_search($ldapconnection, $context,
                                            $filter,
-                                           array($this->cohort_synching_ldap_attribute_attribute));
+                                           array($this->group_synching_ldap_attribute_attribute));
             } else {
                 // Search only in this context
                 $ldap_result = ldap_list($ldapconnection, $context,
                                          $filter,
-                                         array($this->cohort_synching_ldap_attribute_attribute));
+                                         array($this->group_synching_ldap_attribute_attribute));
             }
 
             if(!$ldap_result) {
@@ -648,13 +640,13 @@ class GAAuthLdap extends AuthLdap {
             
             // Add found DISTINCT values to list
            for ($i = 0; $i < count($users); $i++) {
-               $count=$users[$i][$this->config['cohort_synching_ldap_attribute_attribute']]['count'];
+               $count=$users[$i][$this->config['group_synching_ldap_attribute_attribute']]['count'];
                for ($j=0; $j <$count; $j++) {
                	/*
-                   $value=  textlib::convert($users[$i][$this->config['cohort_synching_ldap_attribute_attribute']][$j],
+                   $value=  textlib::convert($users[$i][$this->config['group_synching_ldap_attribute_attribute']][$j],
                                 $this->config->ldapencoding, 'utf-8');
                 */                
-               	 $value=  $users[$i][$this->config['cohort_synching_ldap_attribute_attribute']][$j];
+               	 $value=  $users[$i][$this->config['group_synching_ldap_attribute_attribute']][$j];
                   if (! in_array ($value, $matchings)) {
                        array_push($matchings,$value);
                   }
@@ -672,7 +664,7 @@ class GAAuthLdap extends AuthLdap {
     	//build a filter
 
 
-    	$filter=$this->config['cohort_synching_ldap_attribute_attribute'].'='.
+    	$filter=$this->config['group_synching_ldap_attribute_attribute'].'='.
     	        $this->filter_addslashes($attributevalue);
 
     	// call Moodle ldap_get_userlist that return it as an array with user attributes names
@@ -742,7 +734,7 @@ function ldap_sync_filter_name($name, $includes, $excludes) {
 			}
 			if (!filter_var($name, FILTER_VALIDATE_REGEXP, array("options" => array('regexp' => '/' . $regexp . '/')))) {
 				if ($CFG->debug_ldap_groupes) {
-					print ($name . " refusé par includes \n");
+					print ($name . " skipped because not in include list \n");
 				}
 				return false;
 			}
@@ -755,7 +747,7 @@ function ldap_sync_filter_name($name, $includes, $excludes) {
 			}
 			if (filter_var($name, FILTER_VALIDATE_REGEXP, array("options" => array('regexp' => '/' . $regexp . '/')))) {
 				if ($CFG->debug_ldap_groupes) {
-					print ($name . " refusé par excludes \n");
+					print ($name . " skipped because in exclude list \n");
 				}
 				return false;
 			}
