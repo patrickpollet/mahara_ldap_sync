@@ -1,3 +1,5 @@
+Quick installtion guide :
+
 1) using git : in mahara's local directory execute the following command :
 
  git clone git@github.com:patrickpollet/mahara_ldap_sync.git
@@ -11,5 +13,9 @@ into mahara's local directory and rename patrickpollet-mahara_ldap_sync_xxxxx fo
 
 4) in case a new version is released on github just type on the command line 'git pull' within directory local/mahara_ldap_sync if you are using git
  or repeat step 1bis otherwise.
+
+Documentation :
+
+ <a href="https://github.com/patrickpollet/mahara_ldap_sync/wiki> Read the wiki </a>
 
 Enjoy.
