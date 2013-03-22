@@ -96,11 +96,6 @@ require_once(get_config('docroot') . 'auth/ldap/lib.php');
 require_once(dirname(dirname(__FILE__))) . '/lib.php';
 
 
-$CFG->debug_ldap_groupes = true;
-//testing flag force a LDAP search for mahara username even if the user's DN
-//is in the form xx=maharausername,ou=xxxx,dc=yyyyy ....  
-//$CFG->no_speedup_ldap = true;
-
 
 $cli = get_cli();
 
@@ -187,6 +182,7 @@ catch (Exception $e) {
     cli::cli_exit($e->getMessage(), true);
 }
 
+$cli->cli_print('---------- started at ' . date('r', time()) . ' ----------');
 if ($CFG->debug_ldap_groupes) {
     moodle_print_object("institution : ", $institution);
     moodle_print_object("exclusion list : ", $excludelist);
@@ -275,9 +271,17 @@ foreach ($auths as $auth) {
         // test whether this group exists within the institution
         if (!$dbgroup = get_record('group', 'shortname', $group, 'institution', $institutionname)) {
             if ($nocreate) {
-                $cli->cli_print('skipping Mahara not existing group ' . $group);
+                $cli->cli_print('autocreation is off so skipping Mahara not existing group ' . $group);
                 continue;
             }
+            
+            $ldapusers = $instance->get_users_having_attribute_value($group);
+            if (count($ldapusers)==0) {
+            	 $cli->cli_print('will not autocreate an empty Mahara group ' . $group);
+            	 continue;
+            }
+            
+            
             try {
                 $cli->cli_print('creating group ' . $group);
                 $dbgroup = array();
@@ -298,13 +302,9 @@ foreach ($auths as $auth) {
         } else {
             $groupid = $dbgroup->id;
             $cli->cli_print('group exists ' . $group);
-
+            $ldapusers = $instance->get_users_having_attribute_value($group);
         }
         // now it does  exist see what members should be added/removed
-
-        $ldapusers = $instance->get_users_having_attribute_value($group);
- 
-
         $members = array('1' => 'admin'); //must be set otherwise fatal error group_update_members: no group admins listed for group
         foreach ($ldapusers as $username) {
             if (isset($currentmembers[$username])) {
@@ -330,5 +330,5 @@ foreach ($auths as $auth) {
 }
 
 $USER->logout(); // important
-cli::cli_exit("fini", true);
+cli::cli_exit('---------- ended at ' . date('r', time()) . ' ----------', true);
 

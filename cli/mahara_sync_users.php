@@ -171,7 +171,7 @@ catch (Exception $e) {
     cli::cli_exit($e->getMessage(), true);
 }
 
-
+$cli->cli_print('---------- started at ' . date('r', time()) . ' ----------');
 
 $auths = auth_instance_get_matching_instances($institutionname);
 
@@ -411,7 +411,7 @@ WHERE U.id IS NULL       ORDER BY  E.extusername';
 $cli->cli_print("LDAP users : $nbpresents updated : $nbupdated unsuspended : $nbunsuspended created : $nbcreated suspended : $nbsuspended deleted : $nbdeleted ignored : $nbignored errors :$nberrors");
 
 $USER->logout(); // important
-$cli->cli_exit("fini", true);
+cli::cli_exit('---------- ended at ' . date('r', time()) . ' ----------', true);
 
 
 

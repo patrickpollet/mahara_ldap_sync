@@ -178,6 +178,8 @@ catch (Exception $e) {
     cli::cli_exit($e->getMessage(), true);
 }
 
+$cli->cli_print('---------- started at ' . date('r', time()) . ' ----------');
+
 if ($CFG->debug_ldap_groupes) {
     moodle_print_object("institution : ", $institution);
     moodle_print_object("exclusion list : ", $excludelist);
@@ -266,9 +268,15 @@ foreach ($auths as $auth) {
         // test whether this group exists within the institution
         if (!$dbgroup = get_record('group', 'shortname', $group, 'institution', $institutionname)) {
             if ($nocreate) {
-                $cli->cli_print('skipping Mahara not existing group ' . $group);
+                $cli->cli_print('autocreation is off so skipping Mahara not existing group ' . $group);
                 continue;
             }
+            $ldapusers = $instance->ldap_get_group_members($group);
+            if (count($ldapusers)==0) {
+            	 $cli->cli_print('will not autocreate an empty Mahara group ' . $group);
+            	 continue;
+            }  
+             
             try {
                 $cli->cli_print('creating group ' . $group);
                 $dbgroup = array();
@@ -289,11 +297,11 @@ foreach ($auths as $auth) {
         } else {
             $groupid = $dbgroup->id;
             $cli->cli_print('group exists ' . $group);
+            $ldapusers = $instance->ldap_get_group_members($group);
 
         }
         // now it does  exist see what members should be added/removed
-
-        $ldapusers = $instance->ldap_get_group_members($group);
+     
         if ($CFG->debug_ldap_groupes) {
             moodle_print_object($group . ' : ', $ldapusers);
         }
@@ -324,5 +332,5 @@ foreach ($auths as $auth) {
 }
 
 $USER->logout(); // important
-cli::cli_exit("fini", true);
+cli::cli_exit('---------- ended at ' . date('r', time()) . ' ----------', true);
 
