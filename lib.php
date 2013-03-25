@@ -43,6 +43,14 @@ class GAAuthLdap extends AuthLdap {
 		 */
 		$this->config['groups_dn_cache']=array();
 		$this->anti_recursion_array=array();
+		
+		// restricted list of values to use in synchying Mahara's groups with some LDAP attribute
+		if (!empty($CFG->group_synching_ldap_attribute_values))
+			$this->config->group_synching_ldap_attribute_values=
+			  explode(',',$CFG->group_synching_ldap_attribute_values);
+		else	
+		    $this->config->group_synching_ldap_attribute_values=array();
+		
 
 	}
 
@@ -590,8 +598,8 @@ class GAAuthLdap extends AuthLdap {
       
         global $CFG, $DB;
         // only these groups will be synched 
-        if (!empty($this->config->cohort_synching_ldap_attribute_idnumbers )) {
-            return $this->config->cohort_synching_ldap_attribute_idnumbers ;
+        if (!empty($this->config->group_synching_ldap_attribute_values )) {
+            return $this->config->group_synching_ldap_attribute_values ;
         }
         
         
