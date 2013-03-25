@@ -1,5 +1,5 @@
 #!/bin/sh
-SYNC_DIR="/var/www/html/mahara/local/ldap/cli"
+SYNC_DIR="/var/www/html/mahara/local/mahara_ldap_sync/cli"
 DATE=`date +%Y-%m-%d`
 LOG_DIR="/work/maharadata/sync"
 PHP=/usr/bin/php
