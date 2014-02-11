@@ -768,21 +768,37 @@ function auth_instance_get_concerned_users($authid, $fieldstofetch) {
 
 }
 
-
+/**
+ * 
+ * Filter an LDAP group name against two arrays of regular expressions
+ * @param string  $name
+ * @param array of string $includes 
+ * @param array of string $excludes
+ * @return boolean
+ * revised 11/02/2013 see https://mahara.org/interaction/forum/topic.php?id=6082&offset=0&limit=10#post25989
+ */
 
 function ldap_sync_filter_name($name, $includes, $excludes) {
 	global $CFG;
 	if (!empty($includes)) {
+		$found=false;
 		foreach ($includes as $regexp) {
 			if (empty($regexp)) {
 				continue;
 			}
-			if (!filter_var($name, FILTER_VALIDATE_REGEXP, array("options" => array('regexp' => '/' . $regexp . '/')))) {
+			if (filter_var($name, FILTER_VALIDATE_REGEXP, array("options" => array('regexp' => '/' . $regexp . '/')))) {
+				$found=true;
 				if ($CFG->debug_ldap_groupes) {
-					print ($name . " skipped because not in include list \n");
+					print ($name . " processed because in include list \n");
 				}
-				return false;
+				break;  // match found in include list go check for exclude
 			}
+		}
+		if (! $found) {
+			if ($CFG->debug_ldap_groupes) {
+				print ($name . " skipped because not in include list \n");
+			}
+			return false;
 		}
 	}
 	if (!empty($excludes)) {
