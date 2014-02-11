@@ -1,8 +1,12 @@
-Quick installtion guide :
+Please note that these scripts are for Mahara 1.7 and below. Starting at mahara 1.8, they are now included in core distribution
+(see https://launchpad.net/mahara/1.8/1.8.0 ) 
+
+
+Quick installation guide :
 
 1) using git : in mahara's local directory execute the following command :
 
- git clone git@github.com:patrickpollet/mahara_ldap_sync.git
+  git clone https://github.com/patrickpollet/mahara_ldap_sync.git
 
 or 1bis) download the latest zip of the code from https://github.com/patrickpollet/mahara_ldap_sync and unzip it
 into mahara's local directory and rename patrickpollet-mahara_ldap_sync_xxxxx folder to mahara_ldap_sync
