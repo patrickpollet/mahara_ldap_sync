@@ -162,8 +162,19 @@ $cli->setup($settings);
 try {
     $institutionname = $cli->get_cli_param('institution');
     $institution = new Institution ($institutionname);
-    $excludelist = explode(';', $cli->get_cli_param('exclude'));
-    $includelist = explode(';', $cli->get_cli_param('include'));
+    //OPTIONALS BUG found 11 march 2014
+    // note the use of $tmp variable to avoid 
+    // PHP Fatal error:  Can't use method return value in write context 
+    $tmp=$cli->get_cli_param('exclude');
+    if (!empty($tmp))
+    	$excludelist = explode(';', $tmp);
+    else
+    	$excludelist = array();
+    $tmp=$cli->get_cli_param('include');
+    if (!empty($tmp))
+    	$includelist = explode(';', $tmp);
+    else
+    	$includelist = array();
     $CFG->debug_ldap_groupes = $cli->get_cli_param('verbose');
     $onlycontexts = $cli->get_cli_param('contexts');
     $searchsub = $cli->get_cli_param('searchsub');
@@ -179,6 +190,10 @@ catch (Exception $e) {
 }
 
 $cli->cli_print('---------- started at ' . date('r', time()) . ' ----------');
+
+
+//$CFG->debug_ldap_groupes = true;
+
 
 if ($CFG->debug_ldap_groupes) {
     moodle_print_object("institution : ", $institution);
